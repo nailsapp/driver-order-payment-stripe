@@ -1,6 +1,6 @@
 {
     "name": "nailsapp/driver-order-payment-stripe",
-    "keywords": ["Nails", "Shed Collective", "CodeIgniter", "Order & Payments Module", "Driver", "Stripe"],
+    "keywords": ["Nails", "Shed Collective", "CodeIgniter", "Order Payments Module", "Driver", "Stripe"],
     "homepage": "http://nailsapp.co.uk/modules/order-payments/driver/stripe",
     "description": "This is the \"Stripe\" driver for the Nails Orders & Payments module.",
     "license": "MIT",
