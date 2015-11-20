@@ -1,8 +1,8 @@
 {
-    "name": "nailsapp/driver-order-payment-stripe",
-    "keywords": ["Nails", "Shed Collective", "CodeIgniter", "Order Payments Module", "Driver", "Stripe"],
-    "homepage": "http://nailsapp.co.uk/modules/order-payments/driver/stripe",
-    "description": "This is the \"Stripe\" driver for the Nails Orders & Payments module.",
+    "name": "nailsapp/driver-invoice-stripe",
+    "keywords": ["Nails", "Shed Collective", "CodeIgniter", "Invoice Module", "Payments", "Driver", "Stripe"],
+    "homepage": "http://nailsapp.co.uk/modules/invoice/driver/stripe",
+    "description": "This is the \"Stripe\" driver for the Nails Invoice module.",
     "license": "MIT",
     "authors":
     [
@@ -21,7 +21,7 @@
     "prefer-stable": true,
     "require":
     {
-        "nailsapp/module-order-payment": "dev-develop"
+        "nailsapp/module-invoice": "dev-develop"
     },
     "require-dev":
     {
@@ -32,7 +32,7 @@
         "nails" :
         {
             "type": "driver",
-            "subType": "order-payment",
+            "subType": "invoice",
             "moduleData": {
                 "className": "Stripe"
             }
@@ -40,6 +40,6 @@
     },
     "autoload":
     {
-        "psr-4": {"Nails\\OrderPayment\\Driver\\": "src/"}
+        "psr-4": {"Nails\\Invoice\\Driver\\": "src/"}
     }
 }
