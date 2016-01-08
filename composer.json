@@ -33,6 +33,7 @@
         {
             "name": "Stripe",
             "type": "driver",
+            "subType": "payment",
             "forModule": "nailsapp/module-invoice",
             "data": {
                 "namespace": "Nails\\Invoice\\Driver\\",
