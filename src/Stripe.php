@@ -34,10 +34,10 @@ class Stripe extends Base
      */
     public function setConfig($aConfig) {
         parent::setConfig($aConfig);
-        $this->sKeyTestSecret = !empty($aConfig['key_test_secret']) ? : null;
-        $this->sKeyTestPublic = !empty($aConfig['key_test_public']) ? : null;
-        $this->sKeyLiveSecret = !empty($aConfig['key_live_secret']) ? : null;
-        $this->sKeyLivePublic = !empty($aConfig['key_live_public']) ? : null;
+        $this->sKeyTestSecret = !empty($aConfig['key_test_secret']) ? $aConfig['key_test_secret'] : null;
+        $this->sKeyTestPublic = !empty($aConfig['key_test_public']) ? $aConfig['key_test_public'] : null;
+        $this->sKeyLiveSecret = !empty($aConfig['key_live_secret']) ? $aConfig['key_live_secret'] : null;
+        $this->sKeyLivePublic = !empty($aConfig['key_live_public']) ? $aConfig['key_live_public'] : null;
         return $this;
     }
 
@@ -77,7 +77,7 @@ class Stripe extends Base
                 )
             );
 
-            dumpanddie($oStripeResponse);
+            $oResponse->setTxnId($oStripeResponse->id);
 
         } catch(\Exception $e) {
 
