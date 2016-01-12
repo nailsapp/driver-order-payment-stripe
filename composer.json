@@ -21,7 +21,8 @@
     "prefer-stable": true,
     "require":
     {
-        "nailsapp/module-invoice": "dev-develop"
+        "nailsapp/module-invoice": "dev-develop",
+        "stripe/stripe-php": "3.*"
     },
     "require-dev":
     {
@@ -37,7 +38,43 @@
             "forModule": "nailsapp/module-invoice",
             "data": {
                 "namespace": "Nails\\Invoice\\Driver\\",
-                "class": "Stripe"
+                "class": "Stripe",
+                "settings": [
+                    {
+                        "legend": "Test API Keys",
+                        "fields": [
+                            {
+                                "key": "key_test_secret",
+                                "label": "Secret Key",
+                                "type": "password",
+                                "encrypted": true
+                            },
+                            {
+                                "key": "key_test_public",
+                                "label": "Public Key",
+                                "type": "password",
+                                "encrypted": true
+                            }
+                        ]
+                    },
+                    {
+                        "legend": "Live API Keys",
+                        "fields": [
+                            {
+                                "key": "key_live_secret",
+                                "label": "Secret Key",
+                                "type": "password",
+                                "encrypted": true
+                            },
+                            {
+                                "key": "key_live_public",
+                                "label": "Public Key",
+                                "type": "password",
+                                "encrypted": true
+                            }
+                        ]
+                    }
+                ]
             }
         }
     },
