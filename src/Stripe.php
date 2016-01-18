@@ -77,7 +77,10 @@ class Stripe extends Base
                 )
             );
 
-            $oResponse->setTxnId($oStripeResponse->id);
+            if ($oStripeResponse->status === 'paid') {
+                $oResponse->setStatusOk();
+                $oResponse->setTxnId($oStripeResponse->id);
+            }
 
         } catch(\Exception $e) {
 
