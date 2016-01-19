@@ -82,9 +82,47 @@ class Stripe extends Base
                 $oResponse->setTxnId($oStripeResponse->id);
             }
 
+        } catch (\Stripe\Error\ApiConnection $e) {
+
+            //  Network problem, perhaps try again.
+            //  @todo log actual exception?
+            throw new DriverException(
+                'There was a problem connecting to Stripe, you may wish to try again. ',
+                $e->getCode()
+            );
+
+        } catch (\Stripe\Error\InvalidRequest $e) {
+
+            //  You screwed up in your programming. Shouldn't happen!
+            //  @todo log actual exception?
+            throw new DriverException($e->getMessage(), $e->getCode());
+
+        } catch (\Stripe\Error\Api $e) {
+
+            //  Stripe's servers are down!
+            //  @todo log actual exception?
+            throw new DriverException(
+                'There was a problem connecting to Stripe, this is a temporary problem. You may wish to try again.',
+                $e->getCode()
+            );
+
+        } catch (\Stripe\Error\Card $e) {
+
+            //  Card was declined. Work out why.
+            $aJsonBody = $e->getJsonBody();
+            $aError    = $aJsonBody['error'];
+
+            throw new DriverException(
+                'The payment card was declined. ' . $aError['message'],
+                $e->getCode()
+            );
+
         } catch(\Exception $e) {
 
-            throw new DriverException($e->getMessage(), $e->getCode());
+            throw new DriverException(
+                $e->getMessage(),
+                $e->getCode()
+            );
         }
 
         return $oResponse;
