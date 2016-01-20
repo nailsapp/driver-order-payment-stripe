@@ -13,54 +13,31 @@
 namespace Nails\Invoice\Driver;
 
 use Nails\Factory;
-use Nails\Invoice\Driver\Base;
+use Nails\Invoice\Driver\PaymentBase;
 use Nails\Invoice\Exception\DriverException;
 
-class Stripe extends Base
+class Stripe extends PaymentBase
 {
-    protected $sLabel = 'Stripe';
-
-    //  API Keys
-    protected $sKeyTestSecret;
-    protected $sKeyTestPublic;
-    protected $sKeyLiveSecret;
-    protected $sKeyLivePublic;
-
-    // --------------------------------------------------------------------------
-
-    /**
-     * Configures the driver
-     * @return object
-     */
-    public function setConfig($aConfig) {
-        parent::setConfig($aConfig);
-        $this->sKeyTestSecret = !empty($aConfig['key_test_secret']) ? $aConfig['key_test_secret'] : null;
-        $this->sKeyTestPublic = !empty($aConfig['key_test_public']) ? $aConfig['key_test_public'] : null;
-        $this->sKeyLiveSecret = !empty($aConfig['key_live_secret']) ? $aConfig['key_live_secret'] : null;
-        $this->sKeyLivePublic = !empty($aConfig['key_live_public']) ? $aConfig['key_live_public'] : null;
-        return $this;
-    }
-
-    // --------------------------------------------------------------------------
-
     /**
      * Take a payment
      * @return \Nails\Invoice\Model\ChargeResponse
      */
-    public function charge($aCard, $iAmount, $sCurrency) {
-
+    public function charge($aCard, $iAmount, $sCurrency)
+    {
         $oResponse = Factory::factory('ChargeResponse', 'nailsapp/module-invoice');
 
         try {
 
             if (ENVIRONMENT === 'PRODUCTION') {
 
-                \Stripe\Stripe::setApiKey($this->sKeyLiveSecret);
+                $sApiKey = $this->getSetting('sKeyLiveSecret');
 
             } else {
 
-                \Stripe\Stripe::setApiKey($this->sKeyTestSecret);
+                $sApiKey = $this->getSetting('sKeyTestSecret');
             }
+
+            \Stripe\Stripe::setApiKey($sApiKey);
 
             $oStripeResponse = \Stripe\Charge::create(
                 array(
@@ -117,7 +94,7 @@ class Stripe extends Base
                 $e->getCode()
             );
 
-        } catch(\Exception $e) {
+        } catch (\Exception $e) {
 
             throw new DriverException(
                 $e->getMessage(),
@@ -134,8 +111,8 @@ class Stripe extends Base
      * Issue a refund for a payment
      * @return \Nails\Invoice\Model\RefundResponse
      */
-    public function refund() {
-
+    public function refund()
+    {
         $oResponse = Factory::factory('RefundResponse', 'nailsapp/module-invoice');
         return $oResponse;
     }

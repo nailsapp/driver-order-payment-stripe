@@ -39,18 +39,33 @@
             "data": {
                 "namespace": "Nails\\Invoice\\Driver\\",
                 "class": "Stripe",
+                "isRedirect": false,
                 "settings": [
+                    {
+                        "key": "sLabel",
+                        "label": "Label",
+                        "info": "The name of the provider, as seen by customers.",
+                        "default": "Stripe"
+                    },
+                    {
+                        "key": "iLogoId",
+                        "label": "Logo",
+                        "info": "The logo of the provider, as seen by customers",
+                        "default": null,
+                        "type": "image",
+                        "bucket": "nailsapp-driver-invoice-stripe"
+                    },
                     {
                         "legend": "Test API Keys",
                         "fields": [
                             {
-                                "key": "key_test_secret",
+                                "key": "sKeyTestSecret",
                                 "label": "Secret Key",
                                 "type": "password",
                                 "encrypted": true
                             },
                             {
-                                "key": "key_test_public",
+                                "key": "sKeyTestPublic",
                                 "label": "Public Key",
                                 "type": "password",
                                 "encrypted": true
@@ -61,13 +76,13 @@
                         "legend": "Live API Keys",
                         "fields": [
                             {
-                                "key": "key_live_secret",
+                                "key": "sKeyLiveSecret",
                                 "label": "Secret Key",
                                 "type": "password",
                                 "encrypted": true
                             },
                             {
-                                "key": "key_live_public",
+                                "key": "sKeyLivePublic",
                                 "label": "Public Key",
                                 "type": "password",
                                 "encrypted": true
