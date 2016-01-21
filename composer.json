@@ -39,7 +39,6 @@
             "data": {
                 "namespace": "Nails\\Invoice\\Driver\\",
                 "class": "Stripe",
-                "isRedirect": false,
                 "settings": [
                     {
                         "key": "sLabel",

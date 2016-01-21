@@ -19,6 +19,30 @@ use Nails\Invoice\Exception\DriverException;
 class Stripe extends PaymentBase
 {
     /**
+     * Returns whether the driver uses a redirect payment flow or not.
+     * @return boolean
+     */
+    public function isRedirect()
+    {
+        return false;
+    }
+
+    // --------------------------------------------------------------------------
+
+
+    /**
+     * Returns the payment fields the driver requires, use self::PAYMENT_FIELDS_CARD
+     * for basic credit card details.
+     * @return mixed
+     */
+    public function paymentFields()
+    {
+        return self::PAYMENT_FIELDS_CARD;
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
      * Take a payment
      * @return \Nails\Invoice\Model\ChargeResponse
      */
