@@ -10,7 +10,7 @@
  * @link
  */
 
-namespace Nails\Invoice\Driver;
+namespace Nails\Invoice\Driver\Payment;
 
 use Nails\Factory;
 use Nails\Invoice\Driver\PaymentBase;
@@ -31,13 +31,13 @@ class Stripe extends PaymentBase
 
 
     /**
-     * Returns the payment fields the driver requires, use self::PAYMENT_FIELDS_CARD
-     * for basic credit card details.
+     * Returns the payment fields the driver requires, use CARD for basic credit
+     * card details.
      * @return mixed
      */
-    public function paymentFields()
+    public function getPaymentFields()
     {
-        return self::PAYMENT_FIELDS_CARD;
+        return 'CARD';
     }
 
     // --------------------------------------------------------------------------
