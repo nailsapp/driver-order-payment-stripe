@@ -29,6 +29,18 @@ class Stripe extends PaymentBase
 
     // --------------------------------------------------------------------------
 
+    /**
+     * Returns any data which should be POSTED to the endpoint as part of a redirect
+     * flow; if empty a header redirect is used instead.
+     * @return array
+     */
+    public function getRedirectPostData()
+    {
+        return array();
+    }
+
+    // --------------------------------------------------------------------------
+
 
     /**
      * Returns the payment fields the driver requires, use CARD for basic credit
@@ -44,9 +56,13 @@ class Stripe extends PaymentBase
 
     /**
      * Take a payment
+     * @param  array   $aData      Any data to use for processing the transaction, e.g., card details
+     * @param  integer $iAmount    The amount to charge
+     * @param  string  $sCurrency  The currency to charge in
+     * @param  string  $sReturnUrl The return URL (if redirecting)
      * @return \Nails\Invoice\Model\ChargeResponse
      */
-    public function charge($aCard, $iAmount, $sCurrency)
+    public function charge($aData, $iAmount, $sCurrency, $sReturnUrl)
     {
         $oResponse = Factory::factory('ChargeResponse', 'nailsapp/module-invoice');
 
@@ -69,16 +85,17 @@ class Stripe extends PaymentBase
                     'currency' => $sCurrency,
                     'source'   => array(
                         'object'    => 'card',
-                        'name'      => $aCard['name'],
-                        'number'    => $aCard['number'],
-                        'exp_month' => $aCard['exp_month'],
-                        'exp_year'  => $aCard['exp_year'],
-                        'cvc'       => $aCard['cvc']
+                        'name'      => $aData->name,
+                        'number'    => $aData->number,
+                        'exp_month' => $aData->exp->month,
+                        'exp_year'  => $aData->exp->year,
+                        'cvc'       => $aData->cvc
                     )
                 )
             );
 
             if ($oStripeResponse->status === 'paid') {
+
                 $oResponse->setStatusOk();
                 $oResponse->setTxnId($oStripeResponse->id);
             }
