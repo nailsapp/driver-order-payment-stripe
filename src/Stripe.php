@@ -55,16 +55,29 @@ class Stripe extends PaymentBase
     // --------------------------------------------------------------------------
 
     /**
-     * Take a payment
-     * @param  array   $aData      Any data to use for processing the transaction, e.g., card details
-     * @param  integer $iAmount    The amount to charge
-     * @param  string  $sCurrency  The currency to charge in
-     * @param  string  $sReturnUrl The return URL (if redirecting)
+     * Initiate a payment
+     * @param  integer   $iAmount      The payment amount
+     * @param  string    $sCurrency    The payment currency
+     * @param  array     $aData        An array of driver data
+     * @param  string    $sDescription The charge description
+     * @param  \stdClass $oPayment     The payment object
+     * @param  \stdClass $oInvoice     The invoice object
+     * @param  string    $sSuccessUrl  The URL to go to after successfull payment
+     * @param  string    $sFailUrl     The URL to go to after failed payment
      * @return \Nails\Invoice\Model\ChargeResponse
      */
-    public function charge($aData, $iAmount, $sCurrency, $sReturnUrl)
+    public function charge(
+        $iAmount,
+        $sCurrency,
+        $aData,
+        $sDescription,
+        $oPayment,
+        $oInvoice,
+        $sSuccessUrl,
+        $sFailUrl
+    )
     {
-        $oResponse = Factory::factory('ChargeResponse', 'nailsapp/module-invoice');
+        $oChargeResponse = Factory::factory('ChargeResponse', 'nailsapp/module-invoice');
 
         try {
 
@@ -77,51 +90,74 @@ class Stripe extends PaymentBase
                 $sApiKey = $this->getSetting('sKeyTestSecret');
             }
 
+            if (empty($sApiKey)) {
+                throw new DriverException('Missing Stripe API Key.', 1);
+            }
+
             \Stripe\Stripe::setApiKey($sApiKey);
 
             $oStripeResponse = \Stripe\Charge::create(
                 array(
-                    'amount'   => $iAmount,
-                    'currency' => $sCurrency,
-                    'source'   => array(
+                    'amount'      => $iAmount,
+                    'currency'    => $sCurrency,
+                    'description' => $sDescription,
+                    'source'      => array(
                         'object'    => 'card',
                         'name'      => $aData->name,
                         'number'    => $aData->number,
                         'exp_month' => $aData->exp->month,
                         'exp_year'  => $aData->exp->year,
                         'cvc'       => $aData->cvc
-                    )
+                    ),
+                    'receipt_email' => !empty($oInvoice->user->id) ? $oInvoice->user->email : $oInvoice->user_email,
+                    'metadata' => array(
+                        'invoiceId'  => $oInvoice->id,
+                        'invoiceRef' => $oInvoice->ref
+                    ),
+                    'statement_descriptor' => substr('INVOICE #' . $oInvoice->ref, 0, 22),
                 )
             );
 
             if ($oStripeResponse->status === 'paid') {
 
-                $oResponse->setStatusOk();
-                $oResponse->setTxnId($oStripeResponse->id);
+                $oChargeResponse->setStatusOk();
+                $oChargeResponse->setTxnId($oStripeResponse->id);
+
+            } else {
+
+                //  @todo: handle errors returned by the Stripe Client/API
+                $oChargeResponse->setStatusFail(
+                    null,
+                    0,
+                    'The gateway rejected the request, you may wish to try again.'
+                );
             }
 
         } catch (\Stripe\Error\ApiConnection $e) {
 
             //  Network problem, perhaps try again.
-            //  @todo log actual exception?
-            throw new DriverException(
-                'There was a problem connecting to Stripe, you may wish to try again. ',
-                $e->getCode()
+            $oChargeResponse->setStatusFail(
+                $e->getMessage(),
+                $e->getCode(),
+                'There was a problem connecting to the gateway, you may wish to try again.'
             );
 
         } catch (\Stripe\Error\InvalidRequest $e) {
 
             //  You screwed up in your programming. Shouldn't happen!
-            //  @todo log actual exception?
-            throw new DriverException($e->getMessage(), $e->getCode());
+            $oChargeResponse->setStatusFail(
+                $e->getMessage(),
+                $e->getCode(),
+                'The gateway rejected the request, you may wish to try again.'
+            );
 
         } catch (\Stripe\Error\Api $e) {
 
             //  Stripe's servers are down!
-            //  @todo log actual exception?
-            throw new DriverException(
-                'There was a problem connecting to Stripe, this is a temporary problem. You may wish to try again.',
-                $e->getCode()
+            $oChargeResponse->setStatusFail(
+                $e->getMessage(),
+                $e->getCode(),
+                'There was a problem connecting to the gateway, you may wish to try again.'
             );
 
         } catch (\Stripe\Error\Card $e) {
@@ -130,20 +166,37 @@ class Stripe extends PaymentBase
             $aJsonBody = $e->getJsonBody();
             $aError    = $aJsonBody['error'];
 
-            throw new DriverException(
-                'The payment card was declined. ' . $aError['message'],
-                $e->getCode()
+            $oChargeResponse->setStatusFail(
+                $e->getMessage(),
+                $e->getCode(),
+                'The payment card was declined. ' . $aError['message']
             );
 
         } catch (\Exception $e) {
 
-            throw new DriverException(
+            $oChargeResponse->setStatusFail(
                 $e->getMessage(),
-                $e->getCode()
+                $e->getCode(),
+                'An error occurred while executing the request.'
             );
         }
 
-        return $oResponse;
+        return $oChargeResponse;
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Complete the payment
+     * @param  array $aGetVars  Any $_GET variables passed from the redirect flow
+     * @param  array $aPostVars Any $_POST variables passed from the redirect flow
+     * @return \Nails\Invoice\Model\CompleteResponse
+     */
+    public function complete($aGetVars, $aPostVars)
+    {
+        $oCompleteResponse = Factory::factory('CompleteResponse', 'nailsapp/module-invoice');
+        $oCompleteResponse->setStatusOk();
+        return $oCompleteResponse;
     }
 
     // --------------------------------------------------------------------------
@@ -154,7 +207,8 @@ class Stripe extends PaymentBase
      */
     public function refund()
     {
-        $oResponse = Factory::factory('RefundResponse', 'nailsapp/module-invoice');
-        return $oResponse;
+        dumpanddie('Refund');
+        $oChargeResponse = Factory::factory('RefundResponse', 'nailsapp/module-invoice');
+        return $oChargeResponse;
     }
 }
