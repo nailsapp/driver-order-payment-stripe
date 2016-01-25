@@ -19,6 +19,18 @@ use Nails\Invoice\Exception\DriverException;
 class Stripe extends PaymentBase
 {
     /**
+     * Returns whether the driver is available to be used against the selected iinvoice
+     * @param \stdClass $oInvoice The invoice being charged
+     * @return boolean
+     */
+    public function isAvailable($oInvoice)
+    {
+        return true;
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
      * Returns whether the driver uses a redirect payment flow or not.
      * @return boolean
      */
@@ -28,19 +40,6 @@ class Stripe extends PaymentBase
     }
 
     // --------------------------------------------------------------------------
-
-    /**
-     * Returns any data which should be POSTED to the endpoint as part of a redirect
-     * flow; if empty a header redirect is used instead.
-     * @return array
-     */
-    public function getRedirectPostData()
-    {
-        return array();
-    }
-
-    // --------------------------------------------------------------------------
-
 
     /**
      * Returns the payment fields the driver requires, use CARD for basic credit
@@ -120,13 +119,13 @@ class Stripe extends PaymentBase
 
             if ($oStripeResponse->status === 'paid') {
 
-                $oChargeResponse->setStatusOk();
+                $oChargeResponse->setStatusComplete();
                 $oChargeResponse->setTxnId($oStripeResponse->id);
 
             } else {
 
                 //  @todo: handle errors returned by the Stripe Client/API
-                $oChargeResponse->setStatusFail(
+                $oChargeResponse->setStatusFailed(
                     null,
                     0,
                     'The gateway rejected the request, you may wish to try again.'
@@ -136,7 +135,7 @@ class Stripe extends PaymentBase
         } catch (\Stripe\Error\ApiConnection $e) {
 
             //  Network problem, perhaps try again.
-            $oChargeResponse->setStatusFail(
+            $oChargeResponse->setStatusFailed(
                 $e->getMessage(),
                 $e->getCode(),
                 'There was a problem connecting to the gateway, you may wish to try again.'
@@ -145,7 +144,7 @@ class Stripe extends PaymentBase
         } catch (\Stripe\Error\InvalidRequest $e) {
 
             //  You screwed up in your programming. Shouldn't happen!
-            $oChargeResponse->setStatusFail(
+            $oChargeResponse->setStatusFailed(
                 $e->getMessage(),
                 $e->getCode(),
                 'The gateway rejected the request, you may wish to try again.'
@@ -154,7 +153,7 @@ class Stripe extends PaymentBase
         } catch (\Stripe\Error\Api $e) {
 
             //  Stripe's servers are down!
-            $oChargeResponse->setStatusFail(
+            $oChargeResponse->setStatusFailed(
                 $e->getMessage(),
                 $e->getCode(),
                 'There was a problem connecting to the gateway, you may wish to try again.'
@@ -166,7 +165,7 @@ class Stripe extends PaymentBase
             $aJsonBody = $e->getJsonBody();
             $aError    = $aJsonBody['error'];
 
-            $oChargeResponse->setStatusFail(
+            $oChargeResponse->setStatusFailed(
                 $e->getMessage(),
                 $e->getCode(),
                 'The payment card was declined. ' . $aError['message']
@@ -174,7 +173,7 @@ class Stripe extends PaymentBase
 
         } catch (\Exception $e) {
 
-            $oChargeResponse->setStatusFail(
+            $oChargeResponse->setStatusFailed(
                 $e->getMessage(),
                 $e->getCode(),
                 'An error occurred while executing the request.'
@@ -188,14 +187,16 @@ class Stripe extends PaymentBase
 
     /**
      * Complete the payment
-     * @param  array $aGetVars  Any $_GET variables passed from the redirect flow
-     * @param  array $aPostVars Any $_POST variables passed from the redirect flow
+     * @param  \stdClass $oPayment  The Payment object
+     * @param  \stdClass $oInvoice  The Invoice object
+     * @param  array     $aGetVars  Any $_GET variables passed from the redirect flow
+     * @param  array     $aPostVars Any $_POST variables passed from the redirect flow
      * @return \Nails\Invoice\Model\CompleteResponse
      */
-    public function complete($aGetVars, $aPostVars)
+    public function complete($oPayment, $oInvoice, $aGetVars, $aPostVars)
     {
         $oCompleteResponse = Factory::factory('CompleteResponse', 'nailsapp/module-invoice');
-        $oCompleteResponse->setStatusOk();
+        $oCompleteResponse->setStatusComplete();
         return $oCompleteResponse;
     }
 
