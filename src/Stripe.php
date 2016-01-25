@@ -13,6 +13,7 @@
 namespace Nails\Invoice\Driver\Payment;
 
 use Nails\Factory;
+use Nails\Environment;
 use Nails\Invoice\Driver\PaymentBase;
 use Nails\Invoice\Exception\DriverException;
 
@@ -20,10 +21,9 @@ class Stripe extends PaymentBase
 {
     /**
      * Returns whether the driver is available to be used against the selected iinvoice
-     * @param \stdClass $oInvoice The invoice being charged
      * @return boolean
      */
-    public function isAvailable($oInvoice)
+    public function isAvailable()
     {
         return true;
     }
@@ -80,7 +80,7 @@ class Stripe extends PaymentBase
 
         try {
 
-            if (ENVIRONMENT === 'PRODUCTION') {
+            if (Environment::is('PRODUCTION')) {
 
                 $sApiKey = $this->getSetting('sKeyLiveSecret');
 
@@ -187,29 +187,12 @@ class Stripe extends PaymentBase
 
     /**
      * Complete the payment
-     * @param  \stdClass $oPayment  The Payment object
-     * @param  \stdClass $oInvoice  The Invoice object
-     * @param  array     $aGetVars  Any $_GET variables passed from the redirect flow
-     * @param  array     $aPostVars Any $_POST variables passed from the redirect flow
      * @return \Nails\Invoice\Model\CompleteResponse
      */
-    public function complete($oPayment, $oInvoice, $aGetVars, $aPostVars)
+    public function complete()
     {
         $oCompleteResponse = Factory::factory('CompleteResponse', 'nailsapp/module-invoice');
         $oCompleteResponse->setStatusComplete();
         return $oCompleteResponse;
-    }
-
-    // --------------------------------------------------------------------------
-
-    /**
-     * Issue a refund for a payment
-     * @return \Nails\Invoice\Model\RefundResponse
-     */
-    public function refund()
-    {
-        dumpanddie('Refund');
-        $oChargeResponse = Factory::factory('RefundResponse', 'nailsapp/module-invoice');
-        return $oChargeResponse;
     }
 }
