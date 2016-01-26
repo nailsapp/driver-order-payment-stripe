@@ -63,6 +63,7 @@ class Stripe extends PaymentBase
      * @param  \stdClass $oInvoice     The invoice object
      * @param  string    $sSuccessUrl  The URL to go to after successfull payment
      * @param  string    $sFailUrl     The URL to go to after failed payment
+     * @param  string    $sContinueUrl The URL to go to after payment is completed
      * @return \Nails\Invoice\Model\ChargeResponse
      */
     public function charge(
@@ -73,7 +74,8 @@ class Stripe extends PaymentBase
         $oPayment,
         $oInvoice,
         $sSuccessUrl,
-        $sFailUrl
+        $sFailUrl,
+        $sContinueUrl
     )
     {
         $oChargeResponse = Factory::factory('ChargeResponse', 'nailsapp/module-invoice');
@@ -117,7 +119,7 @@ class Stripe extends PaymentBase
                 )
             );
 
-            if ($oStripeResponse->status === 'paid') {
+            if ($oStripeResponse->paid) {
 
                 $oChargeResponse->setStatusComplete();
                 $oChargeResponse->setTxnId($oStripeResponse->id);
