@@ -110,7 +110,7 @@ class Stripe extends PaymentBase
                         'exp_year'  => $aData->exp->year,
                         'cvc'       => $aData->cvc
                     ),
-                    'receipt_email' => !empty($oInvoice->user->id) ? $oInvoice->user->email : $oInvoice->user_email,
+                    'receipt_email' => !empty($oInvoice->customer->billing_email) ? $oInvoice->customer->billing_email : $oInvoice->customer->email,
                     'metadata' => array(
                         'invoiceId'  => $oInvoice->id,
                         'invoiceRef' => $oInvoice->ref
