@@ -57,7 +57,7 @@ class Stripe extends PaymentBase
      * Initiate a payment
      * @param  integer   $iAmount      The payment amount
      * @param  string    $sCurrency    The payment currency
-     * @param  array     $aData        An array of driver data
+     * @param  \stdClass $oData        The driver data object
      * @param  string    $sDescription The charge description
      * @param  \stdClass $oPayment     The payment object
      * @param  \stdClass $oInvoice     The invoice object
@@ -69,7 +69,7 @@ class Stripe extends PaymentBase
     public function charge(
         $iAmount,
         $sCurrency,
-        $aData,
+        $oData,
         $sDescription,
         $oPayment,
         $oInvoice,
@@ -97,6 +97,11 @@ class Stripe extends PaymentBase
 
             \Stripe\Stripe::setApiKey($sApiKey);
 
+            $aMetaData = !empty($oData->metadata) ? (array) $oData->metadata : array();
+
+            $aMetaData['invoiceId']  = $oInvoice->id;
+            $aMetaData['invoiceRef'] = $oInvoice->ref;
+
             $oStripeResponse = \Stripe\Charge::create(
                 array(
                     'amount'      => $iAmount,
@@ -104,17 +109,14 @@ class Stripe extends PaymentBase
                     'description' => $sDescription,
                     'source'      => array(
                         'object'    => 'card',
-                        'name'      => $aData->name,
-                        'number'    => $aData->number,
-                        'exp_month' => $aData->exp->month,
-                        'exp_year'  => $aData->exp->year,
-                        'cvc'       => $aData->cvc
+                        'name'      => $oData->name,
+                        'number'    => $oData->number,
+                        'exp_month' => $oData->exp->month,
+                        'exp_year'  => $oData->exp->year,
+                        'cvc'       => $oData->cvc
                     ),
                     'receipt_email' => !empty($oInvoice->customer->billing_email) ? $oInvoice->customer->billing_email : $oInvoice->customer->email,
-                    'metadata' => array(
-                        'invoiceId'  => $oInvoice->id,
-                        'invoiceRef' => $oInvoice->ref
-                    ),
+                    'metadata'      => $aMetaData,
                     'statement_descriptor' => substr('INVOICE #' . $oInvoice->ref, 0, 22),
                 )
             );
