@@ -58,6 +58,7 @@ class Stripe extends PaymentBase
      * @param  integer   $iAmount      The payment amount
      * @param  string    $sCurrency    The payment currency
      * @param  \stdClass $oData        The driver data object
+     * @param  \stdClass $oCustomData  The custom data object
      * @param  string    $sDescription The charge description
      * @param  \stdClass $oPayment     The payment object
      * @param  \stdClass $oInvoice     The invoice object
@@ -70,6 +71,7 @@ class Stripe extends PaymentBase
         $iAmount,
         $sCurrency,
         $oData,
+        $oCustomData,
         $sDescription,
         $oPayment,
         $oInvoice,
@@ -97,10 +99,32 @@ class Stripe extends PaymentBase
 
             \Stripe\Stripe::setApiKey($sApiKey);
 
-            $aMetaData = !empty($oData->metadata) ? (array) $oData->metadata : array();
 
-            $aMetaData['invoiceId']  = $oInvoice->id;
-            $aMetaData['invoiceRef'] = $oInvoice->ref;
+            //  Store any custom meta data; Stripe allows up to 20 key value pairs with key
+            //  names up to 40 characters and values up to 500 characters.
+
+            //  In practice only 18 custom key can be defined
+            $aMetaData = array(
+                'invoiceId'  => $oInvoice->id,
+                'invoiceRef' => $oInvoice->ref
+            );
+
+            if (!empty($oCustomData->metadata)) {
+                $aMetaData = array_merge($aMetaData, (array) $oCustomData->metadata);
+            }
+
+            $aCleanMetaData = array();
+            $iCounter       = 0;
+
+            foreach ($aMetaData as $sKey => $mValue) {
+
+                if ($iCounter === 20) {
+                    break;
+                }
+
+                $aCleanMetaData[substr($sKey, 0, 40)] = substr((string) $mValue, 0, 500);
+                $iCounter++;
+            }
 
             $oStripeResponse = \Stripe\Charge::create(
                 array(
@@ -116,7 +140,7 @@ class Stripe extends PaymentBase
                         'cvc'       => $oData->cvc
                     ),
                     'receipt_email' => !empty($oInvoice->customer->billing_email) ? $oInvoice->customer->billing_email : $oInvoice->customer->email,
-                    'metadata'      => $aMetaData,
+                    'metadata'      => $aCleanMetaData,
                     'statement_descriptor' => substr('INVOICE #' . $oInvoice->ref, 0, 22),
                 )
             );
