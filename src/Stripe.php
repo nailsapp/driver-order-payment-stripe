@@ -229,8 +229,7 @@ class Stripe extends PaymentBase
             $this->setApiKey();
 
             //  Get any meta data to pass along to Stripe
-            $aMetaData = $this->extractMetaData($oInvoice, $oCustomData);
-
+            $aMetaData       = $this->extractMetaData($oInvoice, $oCustomData);
             $oStripeResponse = \Stripe\Refund::create(
                 array(
                     'charge'   => $sTxnId,
@@ -290,7 +289,7 @@ class Stripe extends PaymentBase
     /**
      * Set the appropriate API Key to use
      */
-    private function setApiKey()
+    protected function setApiKey()
     {
 
         if (Environment::is('PRODUCTION')) {
@@ -317,7 +316,7 @@ class Stripe extends PaymentBase
      * @param  \stdClass $oCustomData The custom data object
      * @return array
      */
-    private function extractMetaData($oInvoice, $oCustomData)
+    protected function extractMetaData($oInvoice, $oCustomData)
     {
         //  Store any custom meta data; Stripe allows up to 20 key value pairs with key
         //  names up to 40 characters and values up to 500 characters.
