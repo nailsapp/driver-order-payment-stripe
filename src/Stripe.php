@@ -78,52 +78,22 @@ class Stripe extends PaymentBase
         $sSuccessUrl,
         $sFailUrl,
         $sContinueUrl
-    )
-    {
+    ) {
+
         $oChargeResponse = Factory::factory('ChargeResponse', 'nailsapp/module-invoice');
 
         try {
 
-            if (Environment::is('PRODUCTION')) {
+            //  Set the API key to use
+            $this->setApiKey();
 
-                $sApiKey = $this->getSetting('sKeyLiveSecret');
+            //  Get any meta data to pass along to Stripe
+            $aMetaData = $this->extractMetaData($oInvoice, $oCustomData);
 
+            if (!empty($oInvoice->customer->billing_email)) {
+                $sReceiptEmail = $oInvoice->customer->billing_email;
             } else {
-
-                $sApiKey = $this->getSetting('sKeyTestSecret');
-            }
-
-            if (empty($sApiKey)) {
-                throw new DriverException('Missing Stripe API Key.', 1);
-            }
-
-            \Stripe\Stripe::setApiKey($sApiKey);
-
-
-            //  Store any custom meta data; Stripe allows up to 20 key value pairs with key
-            //  names up to 40 characters and values up to 500 characters.
-
-            //  In practice only 18 custom key can be defined
-            $aMetaData = array(
-                'invoiceId'  => $oInvoice->id,
-                'invoiceRef' => $oInvoice->ref
-            );
-
-            if (!empty($oCustomData->metadata)) {
-                $aMetaData = array_merge($aMetaData, (array) $oCustomData->metadata);
-            }
-
-            $aCleanMetaData = array();
-            $iCounter       = 0;
-
-            foreach ($aMetaData as $sKey => $mValue) {
-
-                if ($iCounter === 20) {
-                    break;
-                }
-
-                $aCleanMetaData[substr($sKey, 0, 40)] = substr((string) $mValue, 0, 500);
-                $iCounter++;
+                $sReceiptEmail = $oInvoice->customer->email;
             }
 
             $oStripeResponse = \Stripe\Charge::create(
@@ -139,9 +109,12 @@ class Stripe extends PaymentBase
                         'exp_year'  => $oData->exp->year,
                         'cvc'       => $oData->cvc
                     ),
-                    'receipt_email' => !empty($oInvoice->customer->billing_email) ? $oInvoice->customer->billing_email : $oInvoice->customer->email,
-                    'metadata'      => $aCleanMetaData,
+                    'receipt_email' => $sReceiptEmail,
+                    'metadata'      => $aMetaData,
                     'statement_descriptor' => substr('INVOICE #' . $oInvoice->ref, 0, 22),
+                    'expand' => array(
+                        'balance_transaction'
+                    )
                 )
             );
 
@@ -149,6 +122,7 @@ class Stripe extends PaymentBase
 
                 $oChargeResponse->setStatusComplete();
                 $oChargeResponse->setTxnId($oStripeResponse->id);
+                $oChargeResponse->setFee($oStripeResponse->balance_transaction->fee);
 
             } else {
 
@@ -222,5 +196,154 @@ class Stripe extends PaymentBase
         $oCompleteResponse = Factory::factory('CompleteResponse', 'nailsapp/module-invoice');
         $oCompleteResponse->setStatusComplete();
         return $oCompleteResponse;
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Issue a refund for a payment
+     * @param  string    $sTxnId       The original transaction's ID
+     * @param  integer   $iAmount      The amount to refund
+     * @param  string    $sCurrency    The currency in which to refund
+     * @param  \stdClass $oCustomData  The custom data object
+     * @param  string    $sReason      The refund's reason
+     * @param  \stdClass $oPayment     The payment object
+     * @param  \stdClass $oInvoice     The invoice object
+     * @return \Nails\Invoice\Model\RefundResponse
+     */
+    public function refund(
+        $sTxnId,
+        $iAmount,
+        $sCurrency,
+        $oCustomData,
+        $sReason,
+        $oPayment,
+        $oInvoice
+    ) {
+
+        $oRefundResponse = Factory::factory('RefundResponse', 'nailsapp/module-invoice');
+
+        try {
+
+            //  Set the API key to use
+            $this->setApiKey();
+
+            //  Get any meta data to pass along to Stripe
+            $aMetaData       = $this->extractMetaData($oInvoice, $oCustomData);
+            $oStripeResponse = \Stripe\Refund::create(
+                array(
+                    'charge'   => $sTxnId,
+                    'amount'   => $iAmount,
+                    'metadata' => $aMetaData,
+                    'expand' => array(
+                        'balance_transaction'
+                    )
+                )
+            );
+
+            $oRefundResponse->setStatusComplete();
+            $oRefundResponse->setTxnId($oStripeResponse->id);
+            $oRefundResponse->setFee($oStripeResponse->balance_transaction->fee * -1);
+
+        } catch (\Stripe\Error\ApiConnection $e) {
+
+            //  Network problem, perhaps try again.
+            $oRefundResponse->setStatusFailed(
+                $e->getMessage(),
+                $e->getCode(),
+                'There was a problem connecting to the gateway, you may wish to try again.'
+            );
+
+        } catch (\Stripe\Error\InvalidRequest $e) {
+
+            //  You screwed up in your programming. Shouldn't happen!
+            $oRefundResponse->setStatusFailed(
+                $e->getMessage(),
+                $e->getCode(),
+                'The gateway rejected the request, you may wish to try again.'
+            );
+
+        } catch (\Stripe\Error\Api $e) {
+
+            //  Stripe's servers are down!
+            $oRefundResponse->setStatusFailed(
+                $e->getMessage(),
+                $e->getCode(),
+                'There was a problem connecting to the gateway, you may wish to try again.'
+            );
+
+        } catch (\Exception $e) {
+
+            $oRefundResponse->setStatusFailed(
+                $e->getMessage(),
+                $e->getCode(),
+                'An error occurred while executing the request.'
+            );
+        }
+
+        return $oRefundResponse;
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Set the appropriate API Key to use
+     */
+    protected function setApiKey()
+    {
+
+        if (Environment::is('PRODUCTION')) {
+
+            $sApiKey = $this->getSetting('sKeyLiveSecret');
+
+        } else {
+
+            $sApiKey = $this->getSetting('sKeyTestSecret');
+        }
+
+        if (empty($sApiKey)) {
+            throw new DriverException('Missing Stripe API Key.', 1);
+        }
+
+        \Stripe\Stripe::setApiKey($sApiKey);
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Extract the meta data from the invoice and custom data objects
+     * @param  \stdClass $oInvoice    The invoice object
+     * @param  \stdClass $oCustomData The custom data object
+     * @return array
+     */
+    protected function extractMetaData($oInvoice, $oCustomData)
+    {
+        //  Store any custom meta data; Stripe allows up to 20 key value pairs with key
+        //  names up to 40 characters and values up to 500 characters.
+
+        //  In practice only 18 custom key can be defined
+        $aMetaData = array(
+            'invoiceId'  => $oInvoice->id,
+            'invoiceRef' => $oInvoice->ref
+        );
+
+        if (!empty($oCustomData->metadata)) {
+            $aMetaData = array_merge($aMetaData, (array) $oCustomData->metadata);
+        }
+
+        $aCleanMetaData = array();
+        $iCounter       = 0;
+
+        foreach ($aMetaData as $sKey => $mValue) {
+
+            if ($iCounter === 20) {
+                break;
+            }
+
+            $aCleanMetaData[substr($sKey, 0, 40)] = substr((string) $mValue, 0, 500);
+            $iCounter++;
+        }
+
+        return $aCleanMetaData;
     }
 }
