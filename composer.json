@@ -55,6 +55,13 @@
                         "bucket": "nailsapp-driver-invoice-stripe"
                     },
                     {
+                        "key": "sStatementDescriptor",
+                        "label": "Statement Descriptor",
+                        "info": "The text shown on the customer's statement. You can sub in {{INVOICE_REF}} for the invoice reference.",
+                        "default": "INV #{{INVOICE_REF}}",
+                        "max_length": 22
+                    },
+                    {
                         "legend": "Test API Keys",
                         "fields": [
                             {

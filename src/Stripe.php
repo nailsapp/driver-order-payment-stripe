@@ -96,6 +96,10 @@ class Stripe extends PaymentBase
                 $sReceiptEmail = $oInvoice->customer->email;
             }
 
+            //  Prep the statement descriptor
+            $sStatementDescriptor = $this->getSetting('sStatementDescriptor');
+            $sStatementDescriptor = str_replace('{{INVOICE_REF}}', $oInvoice->ref, $sStatementDescriptor);
+
             $oStripeResponse = \Stripe\Charge::create(
                 array(
                     'amount'      => $iAmount,
