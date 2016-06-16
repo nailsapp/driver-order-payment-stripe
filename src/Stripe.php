@@ -62,7 +62,7 @@ class Stripe extends PaymentBase
      * @param  string    $sDescription The charge description
      * @param  \stdClass $oPayment     The payment object
      * @param  \stdClass $oInvoice     The invoice object
-     * @param  string    $sSuccessUrl  The URL to go to after successfull payment
+     * @param  string    $sSuccessUrl  The URL to go to after successful payment
      * @param  string    $sFailUrl     The URL to go to after failed payment
      * @param  string    $sContinueUrl The URL to go to after payment is completed
      * @return \Nails\Invoice\Model\ChargeResponse
@@ -115,7 +115,7 @@ class Stripe extends PaymentBase
                     ),
                     'receipt_email' => $sReceiptEmail,
                     'metadata'      => $aMetaData,
-                    'statement_descriptor' => substr('INVOICE #' . $oInvoice->ref, 0, 22),
+                    'statement_descriptor' => substr($sStatementDescriptor, 0, 22),
                     'expand' => array(
                         'balance_transaction'
                     )
