@@ -19,6 +19,10 @@ use Nails\Invoice\Exception\DriverException;
 
 class Stripe extends PaymentBase
 {
+    const CUSTOMER_TABLE = NAILS_DB_PREFIX . 'driver_invoice_stripe_customer';
+
+    // --------------------------------------------------------------------------
+
     /**
      * Returns whether the driver is available to be used against the selected iinvoice
      * @return boolean
@@ -62,7 +66,7 @@ class Stripe extends PaymentBase
      * @param  string    $sDescription The charge description
      * @param  \stdClass $oPayment     The payment object
      * @param  \stdClass $oInvoice     The invoice object
-     * @param  string    $sSuccessUrl  The URL to go to after successful payment
+     * @param  string    $sSuccessUrl  The URL to go to after successfull payment
      * @param  string    $sFailUrl     The URL to go to after failed payment
      * @param  string    $sContinueUrl The URL to go to after payment is completed
      * @return \Nails\Invoice\Model\ChargeResponse
@@ -115,7 +119,7 @@ class Stripe extends PaymentBase
                     ),
                     'receipt_email' => $sReceiptEmail,
                     'metadata'      => $aMetaData,
-                    'statement_descriptor' => substr($sStatementDescriptor, 0, 22),
+                    'statement_descriptor' => substr('INVOICE #' . $oInvoice->ref, 0, 22),
                     'expand' => array(
                         'balance_transaction'
                     )
@@ -349,5 +353,59 @@ class Stripe extends PaymentBase
         }
 
         return $aCleanMetaData;
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Returns the stripe reference for a customer if one exists
+     * @param $iCustomerId integer The customer ID to retrieve for
+     * @return integer|null
+     */
+    protected function getStripeCustomerId($iCustomerId)
+    {
+        //  Check to see if we already know the customer's Stripe reference
+        $oDb = Factory::service('Database');
+        $oDb->where('customer_id', $iCustomerId);
+        $oCustomer = $oDb->get(self::CUSTOMER_TABLE)->row();
+
+        return !empty($oCustomer->stripe_id) ? $oCustomer->stripe_id : null;
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Adds a payment source to a customer
+     * @param $iCustomerId integer The customer ID to associate the payment source with
+     * @param $aSourceData array   The payment source data to pass to Stripe
+     */
+    public function addPaymentSource($iCustomerId, $aSourceData)
+    {
+        //  Check to see if we already know the customer's Stripe reference
+        $sStripeCustomerId = $this->getStripeCustomerId($iCustomerId);
+        if (empty($sStripeCustomerId)) {
+            //  @todo - create a new Stripe customer
+        }
+
+        //  @todo - Save the payment source against the customer
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Returns an array of payment sources from Stripe
+     * @param $iCustomerId integer The customer ID to retrieve for
+     * @return array
+     */
+    public function getPaymentSources($iCustomerId)
+    {
+        $sStripeCustomerId = $this->getStripeCustomerId($iCustomerId);
+        if (empty($sStripeCustomerId)) {
+            return array();
+        }
+
+        //  Query Stripe
+        //  @todo - query Stripe for the customer's payment sources
+        return array();
     }
 }
