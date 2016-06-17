@@ -299,7 +299,6 @@ class Stripe extends PaymentBase
      */
     protected function setApiKey()
     {
-
         if (Environment::is('PRODUCTION')) {
 
             $sApiKey = $this->getSetting('sKeyLiveSecret');
@@ -376,18 +375,54 @@ class Stripe extends PaymentBase
 
     /**
      * Adds a payment source to a customer
-     * @param $iCustomerId integer The customer ID to associate the payment source with
-     * @param $aSourceData array   The payment source data to pass to Stripe
+     * @param  $iCustomerId integer      The customer ID to associate the payment source with
+     * @param  $mSourceData string|array The payment source data to pass to Stripe, either a token or an associative array
+     * @return string                    The Stripe Customer ID
+     * @throws DriverException
      */
-    public function addPaymentSource($iCustomerId, $aSourceData)
+    public function addPaymentSource($iCustomerId, $mSourceData)
     {
+        //  Set the API key to use
+        $this->setApiKey();
+
         //  Check to see if we already know the customer's Stripe reference
         $sStripeCustomerId = $this->getStripeCustomerId($iCustomerId);
+
         if (empty($sStripeCustomerId)) {
-            //  @todo - create a new Stripe customer
+
+            //  Create a new Stripe customer
+            $oCustomer = \Stripe\Customer::create(
+                array(
+                    'description' => 'Customer #' . $iCustomerId
+                )
+            );
+
+            //  Associate it with the local customer
+            $oDb = Factory::service('Database');
+            $oDb->set('customer_id', $iCustomerId);
+            $oDb->set('stripe_id', $oCustomer->id);
+            $oDb->set('created', 'NOW()', false);
+            $oDb->set('created_by', activeUser('id') ?: null);
+            $oDb->set('modified', 'NOW()', false);
+            $oDb->set('modified_by', activeUser('id') ?: null);
+            if (!$oDb->insert(self::CUSTOMER_TABLE)) {
+                throw new DriverException('Failed to associate Stripe Customer with the Local Customer.');
+            }
+
+        } else {
+
+            //  Retrieve the customer
+            $oCustomer = \Stripe\Customer::retrieve($sStripeCustomerId);
         }
 
-        //  @todo - Save the payment source against the customer
+        //  Save the payment source against the customer
+        $oSource = $oCustomer->sources->create(
+            array(
+                'source' => $mSourceData
+            )
+        );
+
+        return $oSource->id;
     }
 
     // --------------------------------------------------------------------------
@@ -399,13 +434,27 @@ class Stripe extends PaymentBase
      */
     public function getPaymentSources($iCustomerId)
     {
+        //  Set the API key to use
+        $this->setApiKey();
+
         $sStripeCustomerId = $this->getStripeCustomerId($iCustomerId);
         if (empty($sStripeCustomerId)) {
             return array();
         }
 
         //  Query Stripe
-        //  @todo - query Stripe for the customer's payment sources
-        return array();
+        $oCustomer = \Stripe\Customer::retrieve($sStripeCustomerId);
+        $aSources  = array();
+        foreach ($oCustomer->sources->data as $oSource) {
+            $aSources[] = (object) array(
+                'id'        => $oSource->id,
+                'last4'     => $oSource->last4,
+                'brand'     => $oSource->brand,
+                'exp_month' => $oSource->exp_month,
+                'exp_year'  => $oSource->exp_year,
+                'name'      => $oSource->name
+            );
+        }
+        return $aSources;
     }
 }
