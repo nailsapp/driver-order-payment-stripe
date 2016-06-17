@@ -30,7 +30,7 @@
     },
     "autoload":
     {
-        "psr-4": {"Nails\\Invoice\\Driver\\Payment\\Stripe": "src/"}
+        "psr-4": {"Nails\\Invoice\\Driver\\": "src/"}
     },
     "extra":
     {
@@ -102,9 +102,5 @@
                 ]
             }
         }
-    },
-    "autoload":
-    {
-        "psr-4": {"Nails\\Invoice\\Driver\\": "src/"}
     }
 }

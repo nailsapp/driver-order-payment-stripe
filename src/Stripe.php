@@ -19,10 +19,6 @@ use Nails\Invoice\Exception\DriverException;
 
 class Stripe extends PaymentBase
 {
-    const CUSTOMER_TABLE = NAILS_DB_PREFIX . 'driver_invoice_stripe_customer';
-
-    // --------------------------------------------------------------------------
-
     /**
      * Returns whether the driver is available to be used against the selected iinvoice
      * @return boolean
@@ -66,7 +62,7 @@ class Stripe extends PaymentBase
      * @param  string    $sDescription The charge description
      * @param  \stdClass $oPayment     The payment object
      * @param  \stdClass $oInvoice     The invoice object
-     * @param  string    $sSuccessUrl  The URL to go to after successfull payment
+     * @param  string    $sSuccessUrl  The URL to go to after successful payment
      * @param  string    $sFailUrl     The URL to go to after failed payment
      * @param  string    $sContinueUrl The URL to go to after payment is completed
      * @return \Nails\Invoice\Model\ChargeResponse
@@ -363,24 +359,32 @@ class Stripe extends PaymentBase
      */
     protected function getStripeCustomerId($iCustomerId)
     {
-        //  Check to see if we already know the customer's Stripe reference
-        $oDb = Factory::service('Database');
-        $oDb->where('customer_id', $iCustomerId);
-        $oCustomer = $oDb->get(self::CUSTOMER_TABLE)->row();
+        $oStripeCustomerModel = Factory::model('Customer', 'nailsapp/driver-invoice-stripe');
 
-        return !empty($oCustomer->stripe_id) ? $oCustomer->stripe_id : null;
+        $aResult = $oStripeCustomerModel->getAll(
+            null,
+            null,
+            array(
+                'where' => array(
+                    array('customer_id', $iCustomerId)
+                )
+            )
+        );
+
+        return !empty($aResult) ? $aResult[0]->stripe_id : null;
     }
 
     // --------------------------------------------------------------------------
 
     /**
      * Adds a payment source to a customer
-     * @param  $iCustomerId integer      The customer ID to associate the payment source with
-     * @param  $mSourceData string|array The payment source data to pass to Stripe, either a token or an associative array
-     * @return string                    The Stripe Customer ID
+     * @param  $iCustomerId  integer      The customer ID to associate the payment source with
+     * @param  $mSourceData  string|array The payment source data to pass to Stripe, either a token or an associative array
+     * @param  $sSourceLabel string       The label (or nickname) to give the card
+     * @return string                     The Stripe Customer ID
      * @throws DriverException
      */
-    public function addPaymentSource($iCustomerId, $mSourceData)
+    public function addPaymentSource($iCustomerId, $mSourceData, $sSourceLabel = '')
     {
         //  Set the API key to use
         $this->setApiKey();
@@ -398,15 +402,17 @@ class Stripe extends PaymentBase
             );
 
             //  Associate it with the local customer
-            $oDb = Factory::service('Database');
-            $oDb->set('customer_id', $iCustomerId);
-            $oDb->set('stripe_id', $oCustomer->id);
-            $oDb->set('created', 'NOW()', false);
-            $oDb->set('created_by', activeUser('id') ?: null);
-            $oDb->set('modified', 'NOW()', false);
-            $oDb->set('modified_by', activeUser('id') ?: null);
-            if (!$oDb->insert(self::CUSTOMER_TABLE)) {
-                throw new DriverException('Failed to associate Stripe Customer with the Local Customer.');
+            $oStripeCustomerModel = Factory::model('Customer', 'nailsapp/driver-invoice-stripe');
+
+            $aData = array(
+                'customer_id' => $iCustomerId,
+                'stripe_id'   => $oCustomer->id
+            );
+
+            if (!$oStripeCustomerModel->create($aData)) {
+                throw new DriverException(
+                    'Failed to associate Stripe Customer with the Local Customer. ' . $oStripeCustomerModel->lastError()
+                );
             }
 
         } else {
@@ -422,6 +428,26 @@ class Stripe extends PaymentBase
             )
         );
 
+        //  Save the payment source locally
+        $oStripeSourceModel = Factory::model('Source', 'nailsapp/driver-invoice-stripe');
+
+        $aData = array(
+            'label'       => $sSourceLabel ?: $oSource->brand . ' card ending in ' . $oSource->last4,
+            'customer_id' => $iCustomerId,
+            'stripe_id'   => $oSource->id,
+            'last4'       => $oSource->last4,
+            'brand'       => $oSource->brand,
+            'exp_month'   => $oSource->exp_month,
+            'exp_year'    => $oSource->exp_year,
+            'name'        => $oSource->name
+        );
+
+        if (!$oStripeSourceModel->create($aData)) {
+            throw new DriverException(
+                'Failed to save payment source. ' . $oStripeSourceModel->lastError()
+            );
+        }
+
         return $oSource->id;
     }
 
@@ -434,27 +460,15 @@ class Stripe extends PaymentBase
      */
     public function getPaymentSources($iCustomerId)
     {
-        //  Set the API key to use
-        $this->setApiKey();
-
-        $sStripeCustomerId = $this->getStripeCustomerId($iCustomerId);
-        if (empty($sStripeCustomerId)) {
-            return array();
-        }
-
-        //  Query Stripe
-        $oCustomer = \Stripe\Customer::retrieve($sStripeCustomerId);
-        $aSources  = array();
-        foreach ($oCustomer->sources->data as $oSource) {
-            $aSources[] = (object) array(
-                'id'        => $oSource->id,
-                'last4'     => $oSource->last4,
-                'brand'     => $oSource->brand,
-                'exp_month' => $oSource->exp_month,
-                'exp_year'  => $oSource->exp_year,
-                'name'      => $oSource->name
-            );
-        }
-        return $aSources;
+        $oStripeCustomerModel = Factory::model('Source', 'nailsapp/driver-invoice-stripe');
+        return $oStripeCustomerModel->getAll(
+            null,
+            null,
+            array(
+                'where' => array(
+                    array('customer_id', $iCustomerId)
+                )
+            )
+        );
     }
 }
