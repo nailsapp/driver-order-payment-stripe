@@ -115,7 +115,7 @@ class Stripe extends PaymentBase
                     ),
                     'receipt_email' => $sReceiptEmail,
                     'metadata'      => $aMetaData,
-                    'statement_descriptor' => substr('INVOICE #' . $oInvoice->ref, 0, 22),
+                    'statement_descriptor' => substr($sStatementDescriptor, 0, 22),
                     'expand' => array(
                         'balance_transaction'
                     )
