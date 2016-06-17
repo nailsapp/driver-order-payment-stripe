@@ -357,7 +357,7 @@ class Stripe extends PaymentBase
      * @param $iCustomerId integer The customer ID to retrieve for
      * @return integer|null
      */
-    protected function getStripeCustomerId($iCustomerId)
+    public function getStripeCustomerId($iCustomerId)
     {
         $oStripeCustomerModel = Factory::model('Customer', 'nailsapp/driver-invoice-stripe');
 
