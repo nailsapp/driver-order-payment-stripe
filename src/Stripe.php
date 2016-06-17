@@ -115,7 +115,7 @@ class Stripe extends PaymentBase
                     ),
                     'receipt_email' => $sReceiptEmail,
                     'metadata'      => $aMetaData,
-                    'statement_descriptor' => substr($sStatementDescriptor, 0, 22),
+                    'statement_descriptor' => substr('INVOICE #' . $oInvoice->ref, 0, 22),
                     'expand' => array(
                         'balance_transaction'
                     )
@@ -295,7 +295,6 @@ class Stripe extends PaymentBase
      */
     protected function setApiKey()
     {
-
         if (Environment::is('PRODUCTION')) {
 
             $sApiKey = $this->getSetting('sKeyLiveSecret');
@@ -349,5 +348,127 @@ class Stripe extends PaymentBase
         }
 
         return $aCleanMetaData;
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Returns the stripe reference for a customer if one exists
+     * @param $iCustomerId integer The customer ID to retrieve for
+     * @return integer|null
+     */
+    protected function getStripeCustomerId($iCustomerId)
+    {
+        $oStripeCustomerModel = Factory::model('Customer', 'nailsapp/driver-invoice-stripe');
+
+        $aResult = $oStripeCustomerModel->getAll(
+            null,
+            null,
+            array(
+                'where' => array(
+                    array('customer_id', $iCustomerId)
+                )
+            )
+        );
+
+        return !empty($aResult) ? $aResult[0]->stripe_id : null;
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Adds a payment source to a customer
+     * @param  $iCustomerId  integer      The customer ID to associate the payment source with
+     * @param  $mSourceData  string|array The payment source data to pass to Stripe, either a token or an associative array
+     * @param  $sSourceLabel string       The label (or nickname) to give the card
+     * @return string                     The Stripe Customer ID
+     * @throws DriverException
+     */
+    public function addPaymentSource($iCustomerId, $mSourceData, $sSourceLabel = '')
+    {
+        //  Set the API key to use
+        $this->setApiKey();
+
+        //  Check to see if we already know the customer's Stripe reference
+        $sStripeCustomerId = $this->getStripeCustomerId($iCustomerId);
+
+        if (empty($sStripeCustomerId)) {
+
+            //  Create a new Stripe customer
+            $oCustomer = \Stripe\Customer::create(
+                array(
+                    'description' => 'Customer #' . $iCustomerId
+                )
+            );
+
+            //  Associate it with the local customer
+            $oStripeCustomerModel = Factory::model('Customer', 'nailsapp/driver-invoice-stripe');
+
+            $aData = array(
+                'customer_id' => $iCustomerId,
+                'stripe_id'   => $oCustomer->id
+            );
+
+            if (!$oStripeCustomerModel->create($aData)) {
+                throw new DriverException(
+                    'Failed to associate Stripe Customer with the Local Customer. ' . $oStripeCustomerModel->lastError()
+                );
+            }
+
+        } else {
+
+            //  Retrieve the customer
+            $oCustomer = \Stripe\Customer::retrieve($sStripeCustomerId);
+        }
+
+        //  Save the payment source against the customer
+        $oSource = $oCustomer->sources->create(
+            array(
+                'source' => $mSourceData
+            )
+        );
+
+        //  Save the payment source locally
+        $oStripeSourceModel = Factory::model('Source', 'nailsapp/driver-invoice-stripe');
+
+        $aData = array(
+            'label'       => $sSourceLabel ?: $oSource->brand . ' card ending in ' . $oSource->last4,
+            'customer_id' => $iCustomerId,
+            'stripe_id'   => $oSource->id,
+            'last4'       => $oSource->last4,
+            'brand'       => $oSource->brand,
+            'exp_month'   => $oSource->exp_month,
+            'exp_year'    => $oSource->exp_year,
+            'name'        => $oSource->name
+        );
+
+        if (!$oStripeSourceModel->create($aData)) {
+            throw new DriverException(
+                'Failed to save payment source. ' . $oStripeSourceModel->lastError()
+            );
+        }
+
+        return $oSource->id;
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Returns an array of payment sources from Stripe
+     * @param $iCustomerId integer The customer ID to retrieve for
+     * @return array
+     */
+    public function getPaymentSources($iCustomerId)
+    {
+        $oStripeCustomerModel = Factory::model('Source', 'nailsapp/driver-invoice-stripe');
+        return $oStripeCustomerModel->getAll(
+            null,
+            null,
+            array(
+                'where' => array(
+                    array('customer_id', $iCustomerId)
+                )
+            )
+        );
     }
 }

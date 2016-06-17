@@ -28,6 +28,10 @@
     {
         "phpunit/phpunit": "4.*"
     },
+    "autoload":
+    {
+        "psr-4": {"Nails\\Invoice\\Driver\\": "src/"}
+    },
     "extra":
     {
         "nails" :
@@ -98,9 +102,5 @@
                 ]
             }
         }
-    },
-    "autoload":
-    {
-        "psr-4": {"Nails\\Invoice\\Driver\\": "src/"}
     }
 }
