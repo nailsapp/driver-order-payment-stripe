@@ -100,27 +100,37 @@ class Stripe extends PaymentBase
             $sStatementDescriptor = $this->getSetting('sStatementDescriptor');
             $sStatementDescriptor = str_replace('{{INVOICE_REF}}', $oInvoice->ref, $sStatementDescriptor);
 
-            $oStripeResponse = \Stripe\Charge::create(
-                array(
-                    'amount'      => $iAmount,
-                    'currency'    => $sCurrency,
-                    'description' => $sDescription,
-                    'source'      => array(
-                        'object'    => 'card',
-                        'name'      => $oData->name,
-                        'number'    => $oData->number,
-                        'exp_month' => $oData->exp->month,
-                        'exp_year'  => $oData->exp->year,
-                        'cvc'       => $oData->cvc
-                    ),
-                    'receipt_email' => $sReceiptEmail,
-                    'metadata'      => $aMetaData,
-                    'statement_descriptor' => substr($sStatementDescriptor, 0, 22),
-                    'expand' => array(
-                        'balance_transaction'
-                    )
+            $aRequestData = array(
+                'amount'               => $iAmount,
+                'currency'             => $sCurrency,
+                'description'          => $sDescription,
+                'receipt_email'        => $sReceiptEmail,
+                'metadata'             => $aMetaData,
+                'statement_descriptor' => substr($sStatementDescriptor, 0, 22),
+                'expand'               => array(
+                    'balance_transaction'
                 )
             );
+
+            //  Prep the source - if $oCustomData has a `source` property then use that over any supplied card details
+            if (property_exists($oCustomData, 'source_id') && property_exists($oCustomData, 'customer_id')) {
+
+                $aRequestData['customer'] = $oCustomData->customer_id;
+                $aRequestData['source']   = $oCustomData->source_id;
+
+            } else {
+
+                $aRequestData['source'] = array(
+                    'object'    => 'card',
+                    'name'      => $oData->name,
+                    'number'    => $oData->number,
+                    'exp_month' => $oData->exp->month,
+                    'exp_year'  => $oData->exp->year,
+                    'cvc'       => $oData->cvc
+                );
+            }
+
+            $oStripeResponse = \Stripe\Charge::create($aRequestData);
 
             if ($oStripeResponse->paid) {
 
