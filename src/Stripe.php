@@ -391,7 +391,7 @@ class Stripe extends PaymentBase
      * @param  $iCustomerId  integer      The customer ID to associate the payment source with
      * @param  $mSourceData  string|array The payment source data to pass to Stripe, either a token or an associative array
      * @param  $sSourceLabel string       The label (or nickname) to give the card
-     * @return string                     The Stripe Customer ID
+     * @return \stdClass                  The source object
      * @throws DriverException
      */
     public function addPaymentSource($iCustomerId, $mSourceData, $sSourceLabel = '')
@@ -452,13 +452,14 @@ class Stripe extends PaymentBase
             'name'        => $oSource->name
         );
 
-        if (!$oStripeSourceModel->create($aData)) {
+        $oSource = $oStripeSourceModel->create($aData, true);
+        if (!$oSource) {
             throw new DriverException(
                 'Failed to save payment source. ' . $oStripeSourceModel->lastError()
             );
         }
 
-        return $oSource->id;
+        return $oSource;
     }
 
     // --------------------------------------------------------------------------
