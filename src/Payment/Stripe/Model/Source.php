@@ -24,4 +24,48 @@ class Source extends Base
         $this->table       = NAILS_DB_PREFIX . 'driver_invoice_stripe_source';
         $this->tablePrefix = 'diss';
     }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Return a payment source by its Stripe ID
+     * @param  string $sStripeId The Stripe source ID to look up
+     * @return \stdClass|false
+     */
+    public function getByStripeId($sStripeId)
+    {
+        $aResults = $this->getAll(
+            0,
+            1,
+            array(
+                'where' => array(
+                    array($this->tablePrefix . '.stripe_id', $sStripeId)
+                )
+            )
+        );
+
+        return count($aResults) === 1 ? $aResults[0] : false;
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Return a customer by its Customer ID
+     * @param  string $iCustomerId The customer ID to look up
+     * @return \stdClass|false
+     */
+    public function getByCustomerId($iCustomerId)
+    {
+        $aResults = $this->getAll(
+            0,
+            1,
+            array(
+                'where' => array(
+                    array($this->tablePrefix . '.customer_id', $iCustomerId)
+                )
+            )
+        );
+
+        return count($aResults) === 1 ? $aResults[0] : false;
+    }
 }
