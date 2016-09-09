@@ -21,8 +21,8 @@ class Customer extends Base
     public function __construct()
     {
         parent::__construct();
-        $this->table       = NAILS_DB_PREFIX . 'driver_invoice_stripe_customer';
-        $this->tablePrefix = 'disc';
+        $this->table      = NAILS_DB_PREFIX . 'driver_invoice_stripe_customer';
+        $this->tableAlias = 'disc';
     }
 
     // --------------------------------------------------------------------------
@@ -39,7 +39,7 @@ class Customer extends Base
             1,
             array(
                 'where' => array(
-                    array($this->tablePrefix . '.stripe_id', $sStripeId)
+                    array($this->getTableAlias(true) . 'stripe_id', $sStripeId)
                 )
             )
         );
@@ -61,7 +61,7 @@ class Customer extends Base
             1,
             array(
                 'where' => array(
-                    array($this->tablePrefix . '.customer_id', $iCustomerId)
+                    array($this->getTableAlias(true) . 'customer_id', $iCustomerId)
                 )
             )
         );
