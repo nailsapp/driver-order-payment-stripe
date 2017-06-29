@@ -12,15 +12,22 @@
 
 namespace Nails\Invoice\Driver\Payment;
 
-use Nails\Factory;
 use Nails\Environment;
+use Nails\Factory;
 use Nails\Invoice\Driver\PaymentBase;
 use Nails\Invoice\Exception\DriverException;
+use Stripe\Error\Api;
+use Stripe\Error\ApiConnection;
+use Stripe\Error\Card;
+use Stripe\Error\InvalidRequest;
+use Stripe\Charge;
+use Stripe\Refund;
+use Stripe\Customer;
 
 class Stripe extends PaymentBase
 {
     /**
-     * Returns whether the driver is available to be used against the selected iinvoice
+     * Returns whether the driver is available to be used against the selected invoice
      * @return boolean
      */
     public function isAvailable()
@@ -55,6 +62,7 @@ class Stripe extends PaymentBase
 
     /**
      * Initiate a payment
+     *
      * @param  integer   $iAmount      The payment amount
      * @param  string    $sCurrency    The payment currency
      * @param  \stdClass $oData        The driver data object
@@ -65,6 +73,7 @@ class Stripe extends PaymentBase
      * @param  string    $sSuccessUrl  The URL to go to after successful payment
      * @param  string    $sFailUrl     The URL to go to after failed payment
      * @param  string    $sContinueUrl The URL to go to after payment is completed
+     *
      * @return \Nails\Invoice\Model\ChargeResponse
      */
     public function charge(
@@ -100,17 +109,17 @@ class Stripe extends PaymentBase
             $sStatementDescriptor = $this->getSetting('sStatementDescriptor');
             $sStatementDescriptor = str_replace('{{INVOICE_REF}}', $oInvoice->ref, $sStatementDescriptor);
 
-            $aRequestData = array(
+            $aRequestData = [
                 'amount'               => $iAmount,
                 'currency'             => $sCurrency,
                 'description'          => $sDescription,
                 'receipt_email'        => $sReceiptEmail,
                 'metadata'             => $aMetaData,
                 'statement_descriptor' => substr($sStatementDescriptor, 0, 22),
-                'expand'               => array(
-                    'balance_transaction'
-                )
-            );
+                'expand'               => [
+                    'balance_transaction',
+                ],
+            ];
 
             //  Prep the source - if $oCustomData has a `source` property then use that over any supplied card details
             if (property_exists($oCustomData, 'source_id')) {
@@ -143,17 +152,17 @@ class Stripe extends PaymentBase
 
             } else {
 
-                $aRequestData['source'] = array(
+                $aRequestData['source'] = [
                     'object'    => 'card',
                     'name'      => $oData->name,
                     'number'    => $oData->number,
                     'exp_month' => $oData->exp->month,
                     'exp_year'  => $oData->exp->year,
-                    'cvc'       => $oData->cvc
-                );
+                    'cvc'       => $oData->cvc,
+                ];
             }
 
-            $oStripeResponse = \Stripe\Charge::create($aRequestData);
+            $oStripeResponse = Charge::create($aRequestData);
 
             if ($oStripeResponse->paid) {
 
@@ -171,7 +180,7 @@ class Stripe extends PaymentBase
                 );
             }
 
-        } catch (\Stripe\Error\ApiConnection $e) {
+        } catch (ApiConnection $e) {
 
             //  Network problem, perhaps try again.
             $oChargeResponse->setStatusFailed(
@@ -180,7 +189,7 @@ class Stripe extends PaymentBase
                 'There was a problem connecting to the gateway, you may wish to try again.'
             );
 
-        } catch (\Stripe\Error\InvalidRequest $e) {
+        } catch (InvalidRequest $e) {
 
             //  You screwed up in your programming. Shouldn't happen!
             $oChargeResponse->setStatusFailed(
@@ -189,7 +198,7 @@ class Stripe extends PaymentBase
                 'The gateway rejected the request, you may wish to try again.'
             );
 
-        } catch (\Stripe\Error\Api $e) {
+        } catch (Api $e) {
 
             //  Stripe's servers are down!
             $oChargeResponse->setStatusFailed(
@@ -198,7 +207,7 @@ class Stripe extends PaymentBase
                 'There was a problem connecting to the gateway, you may wish to try again.'
             );
 
-        } catch (\Stripe\Error\Card $e) {
+        } catch (Card $e) {
 
             //  Card was declined. Work out why.
             $aJsonBody = $e->getJsonBody();
@@ -239,13 +248,15 @@ class Stripe extends PaymentBase
 
     /**
      * Issue a refund for a payment
-     * @param  string    $sTxnId       The original transaction's ID
-     * @param  integer   $iAmount      The amount to refund
-     * @param  string    $sCurrency    The currency in which to refund
-     * @param  \stdClass $oCustomData  The custom data object
-     * @param  string    $sReason      The refund's reason
-     * @param  \stdClass $oPayment     The payment object
-     * @param  \stdClass $oInvoice     The invoice object
+     *
+     * @param  string    $sTxnId      The original transaction's ID
+     * @param  integer   $iAmount     The amount to refund
+     * @param  string    $sCurrency   The currency in which to refund
+     * @param  \stdClass $oCustomData The custom data object
+     * @param  string    $sReason     The refund's reason
+     * @param  \stdClass $oPayment    The payment object
+     * @param  \stdClass $oInvoice    The invoice object
+     *
      * @return \Nails\Invoice\Model\RefundResponse
      */
     public function refund(
@@ -267,22 +278,22 @@ class Stripe extends PaymentBase
 
             //  Get any meta data to pass along to Stripe
             $aMetaData       = $this->extractMetaData($oInvoice, $oCustomData);
-            $oStripeResponse = \Stripe\Refund::create(
-                array(
+            $oStripeResponse = Refund::create(
+                [
                     'charge'   => $sTxnId,
                     'amount'   => $iAmount,
                     'metadata' => $aMetaData,
-                    'expand' => array(
-                        'balance_transaction'
-                    )
-                )
+                    'expand'   => [
+                        'balance_transaction',
+                    ],
+                ]
             );
 
             $oRefundResponse->setStatusComplete();
             $oRefundResponse->setTxnId($oStripeResponse->id);
             $oRefundResponse->setFee($oStripeResponse->balance_transaction->fee * -1);
 
-        } catch (\Stripe\Error\ApiConnection $e) {
+        } catch (ApiConnection $e) {
 
             //  Network problem, perhaps try again.
             $oRefundResponse->setStatusFailed(
@@ -291,7 +302,7 @@ class Stripe extends PaymentBase
                 'There was a problem connecting to the gateway, you may wish to try again.'
             );
 
-        } catch (\Stripe\Error\InvalidRequest $e) {
+        } catch (InvalidRequest $e) {
 
             //  You screwed up in your programming. Shouldn't happen!
             $oRefundResponse->setStatusFailed(
@@ -300,7 +311,7 @@ class Stripe extends PaymentBase
                 'The gateway rejected the request, you may wish to try again.'
             );
 
-        } catch (\Stripe\Error\Api $e) {
+        } catch (Api $e) {
 
             //  Stripe's servers are down!
             $oRefundResponse->setStatusFailed(
@@ -310,7 +321,6 @@ class Stripe extends PaymentBase
             );
 
         } catch (\Exception $e) {
-
             $oRefundResponse->setStatusFailed(
                 $e->getMessage(),
                 $e->getCode(),
@@ -329,11 +339,8 @@ class Stripe extends PaymentBase
     protected function setApiKey()
     {
         if (Environment::is('PRODUCTION')) {
-
             $sApiKey = $this->getSetting('sKeyLiveSecret');
-
         } else {
-
             $sApiKey = $this->getSetting('sKeyTestSecret');
         }
 
@@ -348,8 +355,10 @@ class Stripe extends PaymentBase
 
     /**
      * Extract the meta data from the invoice and custom data objects
+     *
      * @param  \stdClass $oInvoice    The invoice object
      * @param  \stdClass $oCustomData The custom data object
+     *
      * @return array
      */
     protected function extractMetaData($oInvoice, $oCustomData)
@@ -358,16 +367,16 @@ class Stripe extends PaymentBase
         //  names up to 40 characters and values up to 500 characters.
 
         //  In practice only 18 custom key can be defined
-        $aMetaData = array(
+        $aMetaData = [
             'invoiceId'  => $oInvoice->id,
-            'invoiceRef' => $oInvoice->ref
-        );
+            'invoiceRef' => $oInvoice->ref,
+        ];
 
         if (!empty($oCustomData->metadata)) {
             $aMetaData = array_merge($aMetaData, (array) $oCustomData->metadata);
         }
 
-        $aCleanMetaData = array();
+        $aCleanMetaData = [];
         $iCounter       = 0;
 
         foreach ($aMetaData as $sKey => $mValue) {
@@ -387,7 +396,9 @@ class Stripe extends PaymentBase
 
     /**
      * Returns the stripe reference for a customer if one exists
+     *
      * @param $iCustomerId integer The customer ID to retrieve for
+     *
      * @return integer|null
      */
     public function getStripeCustomerId($iCustomerId)
@@ -397,11 +408,11 @@ class Stripe extends PaymentBase
         $aResult = $oStripeCustomerModel->getAll(
             null,
             null,
-            array(
-                'where' => array(
-                    array('customer_id', $iCustomerId)
-                )
-            )
+            [
+                'where' => [
+                    ['customer_id', $iCustomerId],
+                ],
+            ]
         );
 
         return !empty($aResult) ? $aResult[0]->stripe_id : null;
@@ -411,9 +422,11 @@ class Stripe extends PaymentBase
 
     /**
      * Adds a payment source to a customer
+     *
      * @param  $iCustomerId  integer      The customer ID to associate the payment source with
-     * @param  $mSourceData  string|array The payment source data to pass to Stripe, either a token or an associative array
+     * @param  $mSourceData  string|array The payment source data to pass to Stripe; a token or an associative array
      * @param  $sSourceLabel string       The label (or nickname) to give the card
+     *
      * @return \stdClass                  The source object
      * @throws DriverException
      */
@@ -428,19 +441,19 @@ class Stripe extends PaymentBase
         if (empty($sStripeCustomerId)) {
 
             //  Create a new Stripe customer
-            $oCustomer = \Stripe\Customer::create(
-                array(
-                    'description' => 'Customer #' . $iCustomerId
-                )
+            $oCustomer = Customer::create(
+                [
+                    'description' => 'Customer #' . $iCustomerId,
+                ]
             );
 
             //  Associate it with the local customer
             $oStripeCustomerModel = Factory::model('Customer', 'nailsapp/driver-invoice-stripe');
 
-            $aData = array(
+            $aData = [
                 'customer_id' => $iCustomerId,
-                'stripe_id'   => $oCustomer->id
-            );
+                'stripe_id'   => $oCustomer->id,
+            ];
 
             if (!$oStripeCustomerModel->create($aData)) {
                 throw new DriverException(
@@ -451,20 +464,20 @@ class Stripe extends PaymentBase
         } else {
 
             //  Retrieve the customer
-            $oCustomer = \Stripe\Customer::retrieve($sStripeCustomerId);
+            $oCustomer = Customer::retrieve($sStripeCustomerId);
         }
 
         //  Save the payment source against the customer
         $oSource = $oCustomer->sources->create(
-            array(
-                'source' => $mSourceData
-            )
+            [
+                'source' => $mSourceData,
+            ]
         );
 
         //  Save the payment source locally
         $oStripeSourceModel = Factory::model('Source', 'nailsapp/driver-invoice-stripe');
 
-        $aData = array(
+        $aData = [
             'label'       => $sSourceLabel ?: $oSource->brand . ' card ending in ' . $oSource->last4,
             'customer_id' => $iCustomerId,
             'stripe_id'   => $oSource->id,
@@ -472,8 +485,8 @@ class Stripe extends PaymentBase
             'brand'       => $oSource->brand,
             'exp_month'   => $oSource->exp_month,
             'exp_year'    => $oSource->exp_year,
-            'name'        => $oSource->name
-        );
+            'name'        => $oSource->name,
+        ];
 
         $oSource = $oStripeSourceModel->create($aData, true);
         if (!$oSource) {
@@ -489,7 +502,9 @@ class Stripe extends PaymentBase
 
     /**
      * Returns an array of payment sources from Stripe
+     *
      * @param $iCustomerId integer The customer ID to retrieve for
+     *
      * @return array
      */
     public function getPaymentSources($iCustomerId)
@@ -498,11 +513,11 @@ class Stripe extends PaymentBase
         return $oStripeSourceModel->getAll(
             null,
             null,
-            array(
-                'where' => array(
-                    array('customer_id', $iCustomerId)
-                )
-            )
+            [
+                'where' => [
+                    ['customer_id', $iCustomerId],
+                ],
+            ]
         );
     }
 }
