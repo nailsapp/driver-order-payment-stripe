@@ -469,19 +469,20 @@ class Stripe extends PaymentBase
 
         //  Save the payment source locally
         $oStripeSourceModel = Factory::model('Source', 'nailsapp/driver-invoice-stripe');
+        $oSource            = $oStripeSourceModel->create(
+            [
+                'label'       => $sSourceLabel ?: $oSource->brand . ' card ending in ' . $oSource->last4,
+                'customer_id' => $iCustomerId,
+                'stripe_id'   => $oSource->id,
+                'last4'       => $oSource->last4,
+                'brand'       => $oSource->brand,
+                'exp_month'   => $oSource->exp_month,
+                'exp_year'    => $oSource->exp_year,
+                'name'        => $oSource->name,
+            ],
+            true
+        );
 
-        $aData = [
-            'label'       => $sSourceLabel ?: $oSource->brand . ' card ending in ' . $oSource->last4,
-            'customer_id' => $iCustomerId,
-            'stripe_id'   => $oSource->id,
-            'last4'       => $oSource->last4,
-            'brand'       => $oSource->brand,
-            'exp_month'   => $oSource->exp_month,
-            'exp_year'    => $oSource->exp_year,
-            'name'        => $oSource->name,
-        ];
-
-        $oSource = $oStripeSourceModel->create($aData, true);
         if (!$oSource) {
             throw new DriverException(
                 'Failed to save payment source. ' . $oStripeSourceModel->lastError()
@@ -494,7 +495,39 @@ class Stripe extends PaymentBase
     // --------------------------------------------------------------------------
 
     /**
-     * Returns an array of payment sources from Stripe
+     * Deletes a customer payment source
+     *
+     * @param integer $iCustomerId The customer ID to associate the payment source with
+     * @param integer $iSourceId   The payment source ID
+     *
+     * @return bool
+     * @throws DriverException
+     */
+    public function removePaymentSource($iCustomerId, $iSourceId)
+    {
+        $oStripeSourceModel = Factory::model('Source', 'nailsapp/driver-invoice-stripe');
+        $aSources           = $oStripeSourceModel->getAll([
+            'where' => [
+                ['id', $iSourceId],
+                ['customer_id', $iCustomerId],
+            ],
+        ]);
+
+        if (count($aSources) !== 1) {
+            throw new DriverException('Not a valid payment source for customer #' . $iCustomerId);
+        }
+
+        $oSource = reset($aSources);
+
+        //  @todo (Pablo - 2018-01-29) - Delete from Stripe
+
+        return $oStripeSourceModel->delete($oSource->id);
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Returns an array of Stripe payment sources for a particular customer ID
      *
      * @param $iCustomerId integer The customer ID to retrieve for
      *
