@@ -144,7 +144,7 @@ class Stripe extends PaymentBase
 
                     $oStripeCustomerModel = Factory::model('Customer', 'nailsapp/driver-invoice-stripe');
                     $oCustomer            = $oStripeCustomerModel->getByCustomerId($oSource->customer_id);
-                    dd($oCustomer, lastQuery());
+
                     if (empty($oCustomer)) {
                         throw new \Exception(
                             'Failed to locate customer ID from payment source ID.'
