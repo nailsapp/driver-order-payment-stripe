@@ -21,51 +21,38 @@ class Customer extends Base
     public function __construct()
     {
         parent::__construct();
-        $this->table      = NAILS_DB_PREFIX . 'driver_invoice_stripe_customer';
-        $this->tableAlias = 'disc';
+        $this->table = NAILS_DB_PREFIX . 'driver_invoice_stripe_customer';
     }
 
     // --------------------------------------------------------------------------
 
     /**
      * Return a customer by its Stripe ID
-     * @param  string $sStripeId The Stripe customer ID to look up
+     *
+     * @param string $sStripeId The Stripe Customer ID to look up
+     * @param array  $aData     Any additional data to pass in
+     *
      * @return \stdClass|false
+     * @throws \Nails\Common\Exception\ModelException
      */
-    public function getByStripeId($sStripeId)
+    public function getByStripeId($sStripeId, $aData = [])
     {
-        $aResults = $this->getAll(
-            0,
-            1,
-            array(
-                'where' => array(
-                    array($this->getTableAlias(true) . 'stripe_id', $sStripeId)
-                )
-            )
-        );
-
-        return count($aResults) === 1 ? $aResults[0] : false;
+        return $this->getByColumn('stripe_id', $sStripeId, $aData, false);
     }
 
     // --------------------------------------------------------------------------
 
     /**
-     * Return a customer by its Customer ID
-     * @param  string $iCustomerId The customer ID to look up
+     * Return a customer by its internal Customer ID
+     *
+     * @param integer $iCustomerId The internal Customer ID to look up
+     * @param array   $aData       Any additional data to pass in
+     *
      * @return \stdClass|false
+     * @throws \Nails\Common\Exception\ModelException
      */
-    public function getByCustomerId($iCustomerId)
+    public function getByCustomerId($iCustomerId, $aData = [])
     {
-        $aResults = $this->getAll(
-            0,
-            1,
-            array(
-                'where' => array(
-                    array($this->getTableAlias(true) . 'customer_id', $iCustomerId)
-                )
-            )
-        );
-
-        return count($aResults) === 1 ? $aResults[0] : false;
+        return $this->getByColumn('customer_id', $iCustomerId, $aData, false);
     }
 }

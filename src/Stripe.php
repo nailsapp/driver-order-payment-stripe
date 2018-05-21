@@ -144,6 +144,7 @@ class Stripe extends PaymentBase
 
                     $oStripeCustomerModel = Factory::model('Customer', 'nailsapp/driver-invoice-stripe');
                     $oCustomer            = $oStripeCustomerModel->getByCustomerId($oSource->customer_id);
+                    dd($oCustomer, lastQuery());
                     if (empty($oCustomer)) {
                         throw new \Exception(
                             'Failed to locate customer ID from payment source ID.'
@@ -467,18 +468,19 @@ class Stripe extends PaymentBase
             'source' => $mSourceData,
         ]);
 
+        $oCard = !empty($oSource->card) ? $oSource->card : $oSource;
+
         //  Save the payment source locally
         $oStripeSourceModel = Factory::model('Source', 'nailsapp/driver-invoice-stripe');
         $oSource            = $oStripeSourceModel->create(
             [
-                'label'       => $sSourceLabel ?: $oSource->brand . ' card ending in ' . $oSource->last4,
+                'label'       => $sSourceLabel ?: $oCard->brand . ' card ending in ' . $oCard->last4,
                 'customer_id' => $iCustomerId,
                 'stripe_id'   => $oSource->id,
-                'last4'       => $oSource->last4,
-                'brand'       => $oSource->brand,
-                'exp_month'   => $oSource->exp_month,
-                'exp_year'    => $oSource->exp_year,
-                'name'        => $oSource->name,
+                'last4'       => $oCard->last4,
+                'brand'       => $oCard->brand,
+                'exp_month'   => $oCard->exp_month,
+                'exp_year'    => $oCard->exp_year,
             ],
             true
         );
