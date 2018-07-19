@@ -35,7 +35,7 @@ class Customer extends Base
      * @return \stdClass|false
      * @throws \Nails\Common\Exception\ModelException
      */
-    public function getByStripeId($sStripeId, $aData = [])
+    public function getByStripeId($sStripeId, array $aData = [])
     {
         return $this->getByColumn('stripe_id', $sStripeId, $aData, false);
     }
@@ -51,7 +51,7 @@ class Customer extends Base
      * @return \stdClass|false
      * @throws \Nails\Common\Exception\ModelException
      */
-    public function getByCustomerId($iCustomerId, $aData = [])
+    public function getByCustomerId($iCustomerId, array $aData = [])
     {
         return $this->getByColumn('customer_id', $iCustomerId, $aData, false);
     }
