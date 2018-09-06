@@ -42,6 +42,7 @@ class Stripe extends PaymentBase
 
     /**
      * Returns whether the driver uses a redirect payment flow or not.
+     *
      * @return boolean
      */
     public function isRedirect()
@@ -54,6 +55,7 @@ class Stripe extends PaymentBase
     /**
      * Returns the payment fields the driver requires, use static::PAYMENT_FIELDS_CARD for basic credit
      * card details.
+     *
      * @return mixed
      */
     public function getPaymentFields()
@@ -102,12 +104,6 @@ class Stripe extends PaymentBase
             //  Get any meta data to pass along to Stripe
             $aMetaData = $this->extractMetaData($oInvoice, $oCustomData);
 
-            if (!empty($oInvoice->customer->billing_email)) {
-                $sReceiptEmail = $oInvoice->customer->billing_email;
-            } else {
-                $sReceiptEmail = $oInvoice->customer->email;
-            }
-
             //  Prep the statement descriptor
             $sStatementDescriptor = $this->getSetting('sStatementDescriptor');
             $sStatementDescriptor = str_replace('{{INVOICE_REF}}', $oInvoice->ref, $sStatementDescriptor);
@@ -116,13 +112,20 @@ class Stripe extends PaymentBase
                 'amount'               => $iAmount,
                 'currency'             => $sCurrency,
                 'description'          => $sDescription,
-                'receipt_email'        => $sReceiptEmail,
                 'metadata'             => $aMetaData,
                 'statement_descriptor' => substr($sStatementDescriptor, 0, 22),
                 'expand'               => [
                     'balance_transaction',
                 ],
             ];
+
+            if ($this->getSetting('bEnableStripeReceiptEmail')) {
+                if (!empty($oInvoice->customer->billing_email)) {
+                    $aRequestData['receipt_email'] = $oInvoice->customer->billing_email;
+                } else {
+                    $aRequestData['receipt_email'] = $oInvoice->customer->email;
+                }
+            }
 
             //  Prep the source - if $oCustomData has a `source` property then use that over any supplied card details
             if (property_exists($oCustomData, 'source_id')) {
