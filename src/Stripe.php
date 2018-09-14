@@ -94,7 +94,7 @@ class Stripe extends PaymentBase
         $sContinueUrl
     ) {
 
-        $oChargeResponse = Factory::factory('ChargeResponse', 'nailsapp/module-invoice');
+        $oChargeResponse = Factory::factory('ChargeResponse', 'nails/module-invoice');
 
         try {
 
@@ -137,7 +137,7 @@ class Stripe extends PaymentBase
                 if (property_exists($oCustomData, 'customer_id')) {
                     $aRequestData['customer'] = $oCustomData->customer_id;
                 } else {
-                    $oStripeSourceModel = Factory::model('Source', 'nailsapp/driver-invoice-stripe');
+                    $oStripeSourceModel = Factory::model('Source', 'nails/driver-invoice-stripe');
                     $oSource            = $oStripeSourceModel->getByStripeId($oCustomData->source_id);
                     if (empty($oSource)) {
                         throw new \Exception(
@@ -145,7 +145,7 @@ class Stripe extends PaymentBase
                         );
                     }
 
-                    $oStripeCustomerModel = Factory::model('Customer', 'nailsapp/driver-invoice-stripe');
+                    $oStripeCustomerModel = Factory::model('Customer', 'nails/driver-invoice-stripe');
                     $oCustomer            = $oStripeCustomerModel->getByCustomerId($oSource->customer_id);
 
                     if (empty($oCustomer)) {
@@ -252,7 +252,7 @@ class Stripe extends PaymentBase
      */
     public function complete($oPayment, $oInvoice, $aGetVars, $aPostVars)
     {
-        $oCompleteResponse = Factory::factory('CompleteResponse', 'nailsapp/module-invoice');
+        $oCompleteResponse = Factory::factory('CompleteResponse', 'nails/module-invoice');
         $oCompleteResponse->setStatusComplete();
         return $oCompleteResponse;
     }
@@ -274,7 +274,7 @@ class Stripe extends PaymentBase
      */
     public function refund($sTxnId, $iAmount, $sCurrency, $oCustomData, $sReason, $oPayment, $oInvoice)
     {
-        $oRefundResponse = Factory::factory('RefundResponse', 'nailsapp/module-invoice');
+        $oRefundResponse = Factory::factory('RefundResponse', 'nails/module-invoice');
 
         try {
 
@@ -408,7 +408,7 @@ class Stripe extends PaymentBase
      */
     public function getStripeCustomerId($iCustomerId)
     {
-        $oStripeCustomerModel = Factory::model('Customer', 'nailsapp/driver-invoice-stripe');
+        $oStripeCustomerModel = Factory::model('Customer', 'nails/driver-invoice-stripe');
 
         $aResult = $oStripeCustomerModel->getAll([
             'where' => [
@@ -447,7 +447,7 @@ class Stripe extends PaymentBase
             ]);
 
             //  Associate it with the local customer
-            $oStripeCustomerModel = Factory::model('Customer', 'nailsapp/driver-invoice-stripe');
+            $oStripeCustomerModel = Factory::model('Customer', 'nails/driver-invoice-stripe');
 
             $aData = [
                 'customer_id' => $iCustomerId,
@@ -474,7 +474,7 @@ class Stripe extends PaymentBase
         $oCard = !empty($oSource->card) ? $oSource->card : $oSource;
 
         //  Save the payment source locally
-        $oStripeSourceModel = Factory::model('Source', 'nailsapp/driver-invoice-stripe');
+        $oStripeSourceModel = Factory::model('Source', 'nails/driver-invoice-stripe');
         $oSource            = $oStripeSourceModel->create(
             [
                 'label'       => $sSourceLabel ?: $oCard->brand . ' card ending in ' . $oCard->last4,
@@ -510,7 +510,7 @@ class Stripe extends PaymentBase
      */
     public function removePaymentSource($iCustomerId, $iSourceId)
     {
-        $oStripeSourceModel = Factory::model('Source', 'nailsapp/driver-invoice-stripe');
+        $oStripeSourceModel = Factory::model('Source', 'nails/driver-invoice-stripe');
         $aSources           = $oStripeSourceModel->getAll([
             'where' => [
                 ['id', $iSourceId],
@@ -540,7 +540,7 @@ class Stripe extends PaymentBase
      */
     public function getPaymentSources($iCustomerId)
     {
-        $oStripeSourceModel = Factory::model('Source', 'nailsapp/driver-invoice-stripe');
+        $oStripeSourceModel = Factory::model('Source', 'nails/driver-invoice-stripe');
         return $oStripeSourceModel->getAll([
             'where' => [
                 ['customer_id', $iCustomerId],

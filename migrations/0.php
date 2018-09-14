@@ -12,7 +12,7 @@
  * @link
  */
 
-namespace Nails\Database\Migration\Nailsapp\DriverInvoiceStripe;
+namespace Nails\Database\Migration\Nails\DriverInvoiceStripe;
 
 use Nails\Common\Console\Migrate\Base;
 

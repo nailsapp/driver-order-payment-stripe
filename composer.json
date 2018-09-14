@@ -1,5 +1,5 @@
 {
-    "name": "nailsapp/driver-invoice-stripe",
+    "name": "nails/driver-invoice-stripe",
     "keywords": [
         "Nails",
         "Shed Collective",
@@ -26,7 +26,7 @@
     "minimum-stability": "dev",
     "prefer-stable": true,
     "require": {
-        "nailsapp/module-invoice": "dev-develop",
+        "nails/module-invoice": "dev-develop",
         "stripe/stripe-php": "3.*"
     },
     "require-dev": {
@@ -42,7 +42,7 @@
             "name": "Stripe",
             "type": "driver",
             "subType": "payment",
-            "forModule": "nailsapp/module-invoice",
+            "forModule": "nails/module-invoice",
             "data": {
                 "namespace": "Nails\\Invoice\\Driver\\Payment\\",
                 "class": "Stripe",
@@ -59,7 +59,7 @@
                         "info": "The logo of the provider, as seen by customers",
                         "default": null,
                         "type": "image",
-                        "bucket": "nailsapp-driver-invoice-stripe"
+                        "bucket": "nails-driver-invoice-stripe"
                     },
                     {
                         "key": "sStatementDescriptor",
