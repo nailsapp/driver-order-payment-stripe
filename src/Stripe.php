@@ -343,7 +343,7 @@ class Stripe extends PaymentBase
      */
     protected function setApiKey()
     {
-        if (Environment::is('PRODUCTION')) {
+        if (Environment::is(Environment::ENV_PROD)) {
             $sApiKey = $this->getSetting('sKeyLiveSecret');
         } else {
             $sApiKey = $this->getSetting('sKeyTestSecret');
