@@ -140,7 +140,7 @@ class Stripe extends PaymentBase
                     $oStripeSourceModel = Factory::model('Source', 'nails/driver-invoice-stripe');
                     $oSource            = $oStripeSourceModel->getByStripeId($oCustomData->source_id);
                     if (empty($oSource)) {
-                        throw new \Exception(
+                        throw new DriverException(
                             'Invalid payment source supplied.'
                         );
                     }
@@ -149,7 +149,7 @@ class Stripe extends PaymentBase
                     $oCustomer            = $oStripeCustomerModel->getByCustomerId($oSource->customer_id);
 
                     if (empty($oCustomer)) {
-                        throw new \Exception(
+                        throw new DriverException(
                             'Failed to locate customer ID from payment source ID.'
                         );
                     }
