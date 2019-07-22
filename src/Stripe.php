@@ -14,8 +14,12 @@ namespace Nails\Invoice\Driver\Payment;
 
 use Nails\Environment;
 use Nails\Factory;
+use Nails\Invoice\Driver\Payment\Stripe\Model\Source;
 use Nails\Invoice\Driver\PaymentBase;
 use Nails\Invoice\Exception\DriverException;
+use Nails\Invoice\Factory\ChargeResponse;
+use Nails\Invoice\Factory\CompleteResponse;
+use Nails\Invoice\Factory\RefundResponse;
 use Stripe\Charge;
 use Stripe\Customer;
 use Stripe\Error\Api;
@@ -24,6 +28,11 @@ use Stripe\Error\Card;
 use Stripe\Error\InvalidRequest;
 use Stripe\Refund;
 
+/**
+ * Class Stripe
+ *
+ * @package Nails\Invoice\Driver\Payment
+ */
 class Stripe extends PaymentBase
 {
     /**
@@ -60,7 +69,40 @@ class Stripe extends PaymentBase
      */
     public function getPaymentFields()
     {
-        return static::PAYMENT_FIELDS_CARD;
+        return [
+            [
+                'key'      => 'token',
+                'label'    => 'Card Details',
+                'required' => true,
+                'id'       => 'stripe-elements-' . md5($this->getSlug()),
+            ],
+        ];
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Returns any assets to load during checkout
+     *
+     * @return array
+     */
+    public function getCheckoutAssets(): array
+    {
+        return [
+            [
+                'https://js.stripe.com/v3',
+                null,
+                'JS',
+            ],
+            [
+                'checkout.min.js?' . implode('&', [
+                    'hash=' . urlencode(md5($this->getSlug())) . '',
+                    'key=' . urlencode($this->getSetting('sKeyTestPublic')) . '',
+                ]),
+                $this->getSlug(),
+                'JS',
+            ],
+        ];
     }
 
     // --------------------------------------------------------------------------
@@ -68,16 +110,16 @@ class Stripe extends PaymentBase
     /**
      * Initiate a payment
      *
-     * @param  integer   $iAmount      The payment amount
-     * @param  string    $sCurrency    The payment currency
-     * @param  \stdClass $oData        The driver data object
-     * @param  \stdClass $oCustomData  The custom data object
-     * @param  string    $sDescription The charge description
-     * @param  \stdClass $oPayment     The payment object
-     * @param  \stdClass $oInvoice     The invoice object
-     * @param  string    $sSuccessUrl  The URL to go to after successful payment
-     * @param  string    $sFailUrl     The URL to go to after failed payment
-     * @param  string    $sContinueUrl The URL to go to after payment is completed
+     * @param integer   $iAmount      The payment amount
+     * @param string    $sCurrency    The payment currency
+     * @param \stdClass $oData        The driver data object
+     * @param \stdClass $oCustomData  The custom data object
+     * @param string    $sDescription The charge description
+     * @param \stdClass $oPayment     The payment object
+     * @param \stdClass $oInvoice     The invoice object
+     * @param string    $sSuccessUrl  The URL to go to after successful payment
+     * @param string    $sFailUrl     The URL to go to after failed payment
+     * @param string    $sContinueUrl The URL to go to after payment is completed
      *
      * @return \Nails\Invoice\Model\ChargeResponse
      */
@@ -94,6 +136,7 @@ class Stripe extends PaymentBase
         $sContinueUrl
     ) {
 
+        /** @var ChargeResponse $oChargeResponse */
         $oChargeResponse = Factory::factory('ChargeResponse', 'nails/module-invoice');
 
         try {
@@ -130,35 +173,35 @@ class Stripe extends PaymentBase
             //  Prep the source - if $oCustomData has a `source` property then use that over any supplied card details
             if (property_exists($oCustomData, 'source_id')) {
 
-                $aRequestData['source'] = $oCustomData->source_id;
+                /**
+                 * The customer is chekcing out using a saved payment source
+                 */
 
-                //  The customer ID must also be passed if using a stored payment source; if it's not passed
-                //  explicitly attempt to look it up.
-                if (property_exists($oCustomData, 'customer_id')) {
-                    $aRequestData['customer'] = $oCustomData->customer_id;
-                } else {
-                    $oStripeSourceModel = Factory::model('Source', 'nails/driver-invoice-stripe');
-                    $oSource            = $oStripeSourceModel->getByStripeId($oCustomData->source_id);
-                    if (empty($oSource)) {
-                        throw new DriverException(
-                            'Invalid payment source supplied.'
-                        );
-                    }
-
-                    $oStripeCustomerModel = Factory::model('Customer', 'nails/driver-invoice-stripe');
-                    $oCustomer            = $oStripeCustomerModel->getByCustomerId($oSource->customer_id);
-
-                    if (empty($oCustomer)) {
-                        throw new DriverException(
-                            'Failed to locate customer ID from payment source ID.'
-                        );
-                    }
-
-                    $aRequestData['customer'] = $oCustomer->stripe_id;
+                /** @var Source $oStripeSourceModel */
+                $oStripeSourceModel = Factory::model('Source', 'nails/driver-invoice-stripe');
+                $oSource            = $oStripeSourceModel->getById($oCustomData->id);
+                if (empty($oSource)) {
+                    throw new DriverException(
+                        dd('Invalid payment source supplied.')
+                    );
                 }
+
+                $aRequestData['source']   = $oSource->stripe_id;
+                $aRequestData['customer'] = $oSource->customer_id;
+
+            } elseif (property_exists($oCustomData, 'token')) {
+
+                /**
+                 * The customer is checking out using a Stripetoken
+                 */
+
+                $aRequestData['source'] = $oCustomData->token;
 
             } else {
 
+                /**
+                 * The customer is chekcing oiut using card details
+                 */
                 $aRequestData['source'] = [
                     'object'    => 'card',
                     'name'      => $oData->name,
@@ -179,7 +222,7 @@ class Stripe extends PaymentBase
 
             } else {
 
-                //  @todo: handle errors returned by the Stripe Client/API
+                //  @todo (Pablo - 2019-07-22) - handle errors returned by the Stripe Client/API
                 $oChargeResponse->setStatusFailed(
                     null,
                     0,
@@ -243,15 +286,16 @@ class Stripe extends PaymentBase
     /**
      * Complete the payment
      *
-     * @param  \stdClass $oPayment  The Payment object
-     * @param  \stdClass $oInvoice  The Invoice object
-     * @param  array     $aGetVars  Any $_GET variables passed from the redirect flow
-     * @param  array     $aPostVars Any $_POST variables passed from the redirect flow
+     * @param \stdClass $oPayment  The Payment object
+     * @param \stdClass $oInvoice  The Invoice object
+     * @param array     $aGetVars  Any $_GET variables passed from the redirect flow
+     * @param array     $aPostVars Any $_POST variables passed from the redirect flow
      *
      * @return \Nails\Invoice\Model\CompleteResponse
      */
     public function complete($oPayment, $oInvoice, $aGetVars, $aPostVars)
     {
+        /** @var CompleteResponse $oCompleteResponse */
         $oCompleteResponse = Factory::factory('CompleteResponse', 'nails/module-invoice');
         $oCompleteResponse->setStatusComplete();
         return $oCompleteResponse;
@@ -262,18 +306,19 @@ class Stripe extends PaymentBase
     /**
      * Issue a refund for a payment
      *
-     * @param  string    $sTxnId      The original transaction's ID
-     * @param  integer   $iAmount     The amount to refund
-     * @param  string    $sCurrency   The currency in which to refund
-     * @param  \stdClass $oCustomData The custom data object
-     * @param  string    $sReason     The refund's reason
-     * @param  \stdClass $oPayment    The payment object
-     * @param  \stdClass $oInvoice    The invoice object
+     * @param string    $sTxnId      The original transaction's ID
+     * @param integer   $iAmount     The amount to refund
+     * @param string    $sCurrency   The currency in which to refund
+     * @param \stdClass $oCustomData The custom data object
+     * @param string    $sReason     The refund's reason
+     * @param \stdClass $oPayment    The payment object
+     * @param \stdClass $oInvoice    The invoice object
      *
      * @return \Nails\Invoice\Model\RefundResponse
      */
     public function refund($sTxnId, $iAmount, $sCurrency, $oCustomData, $sReason, $oPayment, $oInvoice)
     {
+        /** @var RefundResponse $oRefundResponse */
         $oRefundResponse = Factory::factory('RefundResponse', 'nails/module-invoice');
 
         try {
@@ -341,7 +386,7 @@ class Stripe extends PaymentBase
     /**
      * Set the appropriate API Key to use
      */
-    protected function setApiKey()
+    protected function setApiKey(): void
     {
         if (Environment::is(Environment::ENV_PROD)) {
             $sApiKey = $this->getSetting('sKeyLiveSecret');
@@ -361,12 +406,12 @@ class Stripe extends PaymentBase
     /**
      * Extract the meta data from the invoice and custom data objects
      *
-     * @param  \stdClass $oInvoice    The invoice object
-     * @param  \stdClass $oCustomData The custom data object
+     * @param \stdClass $oInvoice    The invoice object
+     * @param \stdClass $oCustomData The custom data object
      *
      * @return array
      */
-    protected function extractMetaData($oInvoice, $oCustomData)
+    protected function extractMetaData($oInvoice, $oCustomData): array
     {
         //  Store any custom meta data; Stripe allows up to 20 key value pairs with key
         //  names up to 40 characters and values up to 500 characters.
@@ -408,6 +453,7 @@ class Stripe extends PaymentBase
      */
     public function getStripeCustomerId($iCustomerId)
     {
+        /** @var \Nails\Invoice\Model\Customer $oStripeCustomerModel */
         $oStripeCustomerModel = Factory::model('Customer', 'nails/driver-invoice-stripe');
 
         $aResult = $oStripeCustomerModel->getAll([
@@ -447,6 +493,7 @@ class Stripe extends PaymentBase
             ]);
 
             //  Associate it with the local customer
+            /** @var \Nails\Invoice\Model\Customer $oStripeCustomerModel */
             $oStripeCustomerModel = Factory::model('Customer', 'nails/driver-invoice-stripe');
 
             $aData = [
@@ -474,6 +521,7 @@ class Stripe extends PaymentBase
         $oCard = !empty($oSource->card) ? $oSource->card : $oSource;
 
         //  Save the payment source locally
+        /** @var Source $oStripeSourceModel */
         $oStripeSourceModel = Factory::model('Source', 'nails/driver-invoice-stripe');
         $oSource            = $oStripeSourceModel->create(
             [
@@ -510,6 +558,7 @@ class Stripe extends PaymentBase
      */
     public function removePaymentSource($iCustomerId, $iSourceId)
     {
+        /** @var Source $oStripeSourceModel */
         $oStripeSourceModel = Factory::model('Source', 'nails/driver-invoice-stripe');
         $aSources           = $oStripeSourceModel->getAll([
             'where' => [
@@ -540,6 +589,7 @@ class Stripe extends PaymentBase
      */
     public function getPaymentSources($iCustomerId)
     {
+        /** @var Source $oStripeSourceModel */
         $oStripeSourceModel = Factory::model('Source', 'nails/driver-invoice-stripe');
         return $oStripeSourceModel->getAll([
             'where' => [
