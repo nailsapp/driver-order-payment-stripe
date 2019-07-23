@@ -49,19 +49,27 @@ class Checkout {
             .$form
             .on('submit', (e) => {
 
-                //  @todo (Pablo - 2019-07-22) - Disable the form (prevent double submission)
-
                 if (this.$input.val().length === 0) {
 
                     e.preventDefault();
+                    $('#js-invoice-pay-now')
+                        .addClass('btn--working')
+                        .prop('disabled', true);
 
                     this
                         .stripe
                         .createToken(this.card)
                         .then((result) => {
+
                             if (result.error) {
+
                                 this.showError(result.error.message);
+                                $('#js-invoice-pay-now')
+                                    .removeClass('btn--working')
+                                    .prop('disabled', false);
+
                             } else {
+
                                 this.hideError()
                                 this.$input.val(result.token.id);
                                 this.$form.submit();
