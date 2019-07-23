@@ -20,12 +20,13 @@ use Nails\Invoice\Exception\DriverException;
 use Nails\Invoice\Factory\ChargeResponse;
 use Nails\Invoice\Factory\CompleteResponse;
 use Nails\Invoice\Factory\RefundResponse;
-use Stripe\Charge;
+use stdClass;
 use Stripe\Customer;
 use Stripe\Error\Api;
 use Stripe\Error\ApiConnection;
 use Stripe\Error\Card;
 use Stripe\Error\InvalidRequest;
+use Stripe\PaymentIntent;
 use Stripe\Refund;
 
 /**
@@ -38,7 +39,7 @@ class Stripe extends PaymentBase
     /**
      * Returns whether the driver is available to be used against the selected invoice
      *
-     * @param \stdClass $oInvoice The invoice being charged
+     * @param stdClass $oInvoice The invoice being charged
      *
      * @return boolean
      */
@@ -110,18 +111,18 @@ class Stripe extends PaymentBase
     /**
      * Initiate a payment
      *
-     * @param integer   $iAmount      The payment amount
-     * @param string    $sCurrency    The payment currency
-     * @param \stdClass $oData        The driver data object
-     * @param \stdClass $oCustomData  The custom data object
-     * @param string    $sDescription The charge description
-     * @param \stdClass $oPayment     The payment object
-     * @param \stdClass $oInvoice     The invoice object
-     * @param string    $sSuccessUrl  The URL to go to after successful payment
-     * @param string    $sFailUrl     The URL to go to after failed payment
-     * @param string    $sContinueUrl The URL to go to after payment is completed
+     * @param integer  $iAmount      The payment amount
+     * @param string   $sCurrency    The payment currency
+     * @param stdClass $oData        The driver data object
+     * @param stdClass $oCustomData  The custom data object
+     * @param string   $sDescription The charge description
+     * @param stdClass $oPayment     The payment object
+     * @param stdClass $oInvoice     The invoice object
+     * @param string   $sSuccessUrl  The URL to go to after successful payment
+     * @param string   $sFailUrl     The URL to go to after failed payment
+     * @param string   $sContinueUrl The URL to go to after payment is completed
      *
-     * @return \Nails\Invoice\Model\ChargeResponse
+     * @return ChargeResponse
      */
     public function charge(
         $iAmount,
@@ -144,75 +145,32 @@ class Stripe extends PaymentBase
             //  Set the API key to use
             $this->setApiKey();
 
-            //  Get any meta data to pass along to Stripe
-            $aMetaData = $this->extractMetaData($oInvoice, $oCustomData);
+            //  Generate the request data
+            $aRequestData = $this->getRequestData(
+                $iAmount,
+                $sCurrency,
+                $oData,
+                $oCustomData,
+                $sDescription,
+                $oInvoice
+            );
 
-            //  Prep the statement descriptor
-            $sStatementDescriptor = $this->getSetting('sStatementDescriptor');
-            $sStatementDescriptor = str_replace('{{INVOICE_REF}}', $oInvoice->ref, $sStatementDescriptor);
+            //  Create the intent
+            $oPaymentIntent = PaymentIntent::create($aRequestData);
 
-            $aRequestData = [
-                'amount'               => $iAmount,
-                'currency'             => $sCurrency,
-                'description'          => $sDescription,
-                'metadata'             => $aMetaData,
-                'statement_descriptor' => substr($sStatementDescriptor, 0, 22),
-                'expand'               => [
-                    'balance_transaction',
-                ],
-            ];
+            if ($oPaymentIntent->status == 'requires_source_action' && $oPaymentIntent->next_action->type == 'use_stripe_sdk') {
 
-            if ($this->getSetting('bEnableStripeReceiptEmail')) {
-                if (!empty($oInvoice->customer->billing_email)) {
-                    $aRequestData['receipt_email'] = $oInvoice->customer->billing_email;
-                } else {
-                    $aRequestData['receipt_email'] = $oInvoice->customer->email;
-                }
+                $oChargeResponse->setIsSca([
+                    'token' => $oPaymentIntent->client_secret,
+                ]);
+
+                return $oChargeResponse;
+
+            } elseif ($oPaymentIntent->status !== 'succeeded') {
+                throw new DriverException('Invalid PaymentIntent status', 500);
             }
 
-            //  Prep the source - if $oCustomData has a `source` property then use that over any supplied card details
-            if (property_exists($oCustomData, 'source_id')) {
-
-                /**
-                 * The customer is chekcing out using a saved payment source
-                 */
-
-                /** @var Source $oStripeSourceModel */
-                $oStripeSourceModel = Factory::model('Source', 'nails/driver-invoice-stripe');
-                $oSource            = $oStripeSourceModel->getById($oCustomData->id);
-                if (empty($oSource)) {
-                    throw new DriverException(
-                        dd('Invalid payment source supplied.')
-                    );
-                }
-
-                $aRequestData['source']   = $oSource->stripe_id;
-                $aRequestData['customer'] = $oSource->customer_id;
-
-            } elseif (property_exists($oCustomData, 'token')) {
-
-                /**
-                 * The customer is checking out using a Stripetoken
-                 */
-
-                $aRequestData['source'] = $oCustomData->token;
-
-            } else {
-
-                /**
-                 * The customer is chekcing oiut using card details
-                 */
-                $aRequestData['source'] = [
-                    'object'    => 'card',
-                    'name'      => $oData->name,
-                    'number'    => $oData->number,
-                    'exp_month' => $oData->exp->month,
-                    'exp_year'  => $oData->exp->year,
-                    'cvc'       => $oData->cvc,
-                ];
-            }
-
-            $oStripeResponse = Charge::create($aRequestData);
+            dd('No further action required, can complete payment', $oPaymentIntent);
 
             if ($oStripeResponse->paid) {
 
@@ -283,15 +241,110 @@ class Stripe extends PaymentBase
 
     // --------------------------------------------------------------------------
 
+    protected function getRequestData(
+        $iAmount,
+        $sCurrency,
+        $oData,
+        $oCustomData,
+        $sDescription,
+        $oInvoice
+    ): array {
+
+        //  Get any meta data to pass along to Stripe
+        $aMetaData = $this->extractMetaData($oInvoice, $oCustomData);
+
+        //  Prep the statement descriptor
+        $sStatementDescriptor = $this->getSetting('sStatementDescriptor');
+        $sStatementDescriptor = str_replace('{{INVOICE_REF}}', $oInvoice->ref, $sStatementDescriptor);
+
+        $aRequestData = [
+            'amount'               => $iAmount,
+            'currency'             => $sCurrency,
+            'confirmation_method'  => 'manual',
+            'confirm'              => true,
+            'description'          => $sDescription,
+            'metadata'             => $aMetaData,
+            'statement_descriptor' => substr($sStatementDescriptor, 0, 22),
+
+            //  @todo (Pablo - 2019-07-22) - Handle calculating this
+            //                'expand'               => [
+            //                    'balance_transaction',
+            //                ],
+        ];
+
+        if ($this->getSetting('bEnableStripeReceiptEmail')) {
+            if (!empty($oInvoice->customer->billing_email)) {
+                $aRequestData['receipt_email'] = $oInvoice->customer->billing_email;
+            } else {
+                $aRequestData['receipt_email'] = $oInvoice->customer->email;
+            }
+        }
+
+        //  Prep the source - if $oCustomData has a `source` property then use that over any supplied card details
+        if (property_exists($oCustomData, 'source_id')) {
+
+            //  @todo (Pablo - 2019-07-22) - Handle this flow
+            dd('Handle passing source_id and customer_id');
+
+            /**
+             * The customer is chekcing out using a saved payment source
+             */
+
+            /** @var Source $oStripeSourceModel */
+            $oStripeSourceModel = Factory::model('Source', 'nails/driver-invoice-stripe');
+            $oSource            = $oStripeSourceModel->getById($oCustomData->id);
+            if (empty($oSource)) {
+                throw new DriverException('Invalid payment source supplied.');
+            }
+
+            $aRequestData['payment_method'] = $oSource->stripe_id;
+            $aRequestData['customer']       = $oSource->customer_id;
+
+        } elseif (property_exists($oCustomData, 'token')) {
+
+            /**
+             * The customer is checking out using a Stripe token
+             */
+
+            $aRequestData['payment_method_data'] = [
+                'type' => 'card',
+                'card' => [
+                    'token' => $oCustomData->token,
+                ],
+            ];
+
+        } else {
+
+            //  @todo (Pablo - 2019-07-22) - Handle this flow
+            dd('Handle passing card details');
+
+            /**
+             * The customer is checking out using card details
+             */
+            $aRequestData['source'] = [
+                'object'    => 'card',
+                'name'      => $oData->name,
+                'number'    => $oData->number,
+                'exp_month' => $oData->exp->month,
+                'exp_year'  => $oData->exp->year,
+                'cvc'       => $oData->cvc,
+            ];
+        }
+
+        return $aRequestData;
+    }
+
+    // --------------------------------------------------------------------------
+
     /**
      * Complete the payment
      *
-     * @param \stdClass $oPayment  The Payment object
-     * @param \stdClass $oInvoice  The Invoice object
-     * @param array     $aGetVars  Any $_GET variables passed from the redirect flow
-     * @param array     $aPostVars Any $_POST variables passed from the redirect flow
+     * @param stdClass $oPayment  The Payment object
+     * @param stdClass $oInvoice  The Invoice object
+     * @param array    $aGetVars  Any $_GET variables passed from the redirect flow
+     * @param array    $aPostVars Any $_POST variables passed from the redirect flow
      *
-     * @return \Nails\Invoice\Model\CompleteResponse
+     * @return CompleteResponse
      */
     public function complete($oPayment, $oInvoice, $aGetVars, $aPostVars)
     {
@@ -306,15 +359,15 @@ class Stripe extends PaymentBase
     /**
      * Issue a refund for a payment
      *
-     * @param string    $sTxnId      The original transaction's ID
-     * @param integer   $iAmount     The amount to refund
-     * @param string    $sCurrency   The currency in which to refund
-     * @param \stdClass $oCustomData The custom data object
-     * @param string    $sReason     The refund's reason
-     * @param \stdClass $oPayment    The payment object
-     * @param \stdClass $oInvoice    The invoice object
+     * @param string   $sTxnId      The original transaction's ID
+     * @param integer  $iAmount     The amount to refund
+     * @param string   $sCurrency   The currency in which to refund
+     * @param stdClass $oCustomData The custom data object
+     * @param string   $sReason     The refund's reason
+     * @param stdClass $oPayment    The payment object
+     * @param stdClass $oInvoice    The invoice object
      *
-     * @return \Nails\Invoice\Model\RefundResponse
+     * @return RefundResponse
      */
     public function refund($sTxnId, $iAmount, $sCurrency, $oCustomData, $sReason, $oPayment, $oInvoice)
     {
@@ -406,8 +459,8 @@ class Stripe extends PaymentBase
     /**
      * Extract the meta data from the invoice and custom data objects
      *
-     * @param \stdClass $oInvoice    The invoice object
-     * @param \stdClass $oCustomData The custom data object
+     * @param stdClass $oInvoice    The invoice object
+     * @param stdClass $oCustomData The custom data object
      *
      * @return array
      */
@@ -474,7 +527,7 @@ class Stripe extends PaymentBase
      * @param  $mSourceData  string|array The payment source data to pass to Stripe; a token or an associative array
      * @param  $sSourceLabel string       The label (or nickname) to give the card
      *
-     * @return \stdClass                  The source object
+     * @return stdClass                  The source object
      * @throws DriverException
      */
     public function addPaymentSource($iCustomerId, $mSourceData, $sSourceLabel = '')
