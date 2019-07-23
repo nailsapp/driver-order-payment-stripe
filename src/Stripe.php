@@ -12,6 +12,7 @@
 
 namespace Nails\Invoice\Driver\Payment;
 
+use Nails\Common\Service\Asset;
 use Nails\Environment;
 use Nails\Factory;
 use Nails\Invoice\Driver\Payment\Stripe\Model\Source;
@@ -161,7 +162,7 @@ class Stripe extends PaymentBase
             if ($oPaymentIntent->status == 'requires_source_action' && $oPaymentIntent->next_action->type == 'use_stripe_sdk') {
 
                 $oChargeResponse->setIsSca([
-                    'token' => $oPaymentIntent->client_secret,
+                    'id' => $oPaymentIntent->id,
                 ]);
 
                 return $oChargeResponse;
@@ -332,6 +333,81 @@ class Stripe extends PaymentBase
         }
 
         return $aRequestData;
+    }
+
+    // --------------------------------------------------------------------------
+
+    public function scaRequest(array $aData, string $sSuccessUrl)
+    {
+        $iPaymentIntentId = getFromArray('id', $aData);
+        if (empty($iPaymentIntentId)) {
+            throw new DriverException('Missing Payment Intent ID');
+        }
+
+        $this->setApiKey();
+        $oPaymentIntent = PaymentIntent::retrieve($iPaymentIntentId);
+        if (empty($oPaymentIntent)) {
+            throw new DriverException('Invalid Payment Intent ID');
+        }
+
+        //  @todo (Pablo - 2019-07-23) - Check status
+
+        $oPaymentIntent = $oPaymentIntent->confirm([
+            'return_url' => $sSuccessUrl,
+        ]);
+
+        if ($oPaymentIntent->status === 'requires_action' || $oPaymentIntent->status === 'requires_source_action') {
+
+            if ($oPaymentIntent->status === 'requires_action') {
+                $sUrl = $oPaymentIntent->next_action->redirect_to_url->url;
+            } else {
+                $sUrl = $oPaymentIntent->next_source_action->authorize_with_url->url;
+            }
+
+            redirect($sUrl);
+
+        } elseif ($oPaymentIntent->status === 'succeeded') {
+            //  @todo (Pablo - 2019-07-23) - Handle success scenario
+            dd('Handle success scenario', $oPaymentIntent);
+        } else {
+            //  @todo (Pablo - 2019-07-23) - handle failure
+            dd('handle failure', $oPaymentIntent);
+        }
+    }
+
+    // --------------------------------------------------------------------------
+
+    public function scaComplete(array $aData)
+    {
+        $iPaymentIntentId = getFromArray('id', $aData);
+        if (empty($iPaymentIntentId)) {
+            throw new DriverException('Missing Payment Intent ID');
+        }
+
+        $this->setApiKey();
+        $oPaymentIntent = PaymentIntent::retrieve($iPaymentIntentId);
+        if (empty($oPaymentIntent)) {
+            throw new DriverException('Invalid Payment Intent ID');
+        }
+
+        //  Check status
+        if ($oPaymentIntent->status !== 'requires_confirmation') {
+            //  @todo (Pablo - 2019-07-23) - handle this
+            dd('Unexpected status');
+        }
+
+        $oPaymentIntent = $oPaymentIntent->confirm();
+        if ($oPaymentIntent->status !== 'succeeded') {
+            //  @todo (Pablo - 2019-07-23) - handle this
+            dd('did not succeed');
+        }
+
+        //  @todo (Pablo - 2019-07-23) - Return payment detals
+        dd(
+            'complete',
+            $oPaymentIntent->status,
+            $oPaymentIntent
+        );
     }
 
     // --------------------------------------------------------------------------
