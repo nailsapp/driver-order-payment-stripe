@@ -12,7 +12,8 @@
 
 namespace Nails\Invoice\Driver\Payment;
 
-use Nails\Common\Service\Asset;
+use Nails\Common\Exception\FactoryException;
+use Nails\Common\Exception\ModelException;
 use Nails\Environment;
 use Nails\Factory;
 use Nails\Invoice\Driver\Payment\Stripe\Model\Source;
@@ -21,7 +22,9 @@ use Nails\Invoice\Exception\DriverException;
 use Nails\Invoice\Factory\ChargeResponse;
 use Nails\Invoice\Factory\CompleteResponse;
 use Nails\Invoice\Factory\RefundResponse;
+use Nails\Invoice\Factory\ScaResponse;
 use stdClass;
+use Stripe\BalanceTransaction;
 use Stripe\Customer;
 use Stripe\Error\Api;
 use Stripe\Error\ApiConnection;
@@ -37,6 +40,17 @@ use Stripe\Refund;
  */
 class Stripe extends PaymentBase
 {
+    const PAYMENT_INTENT_STATUS_REQUIRES_CONFIRMATION   = 'requires_confirmation';
+    const PAYMENT_INTENT_STATUS_REQUIRES_ACTION         = 'requires_action';
+    const PAYMENT_INTENT_STATUS_REQUIRES_PAYMENT_METHOD = 'requires_payment_method';
+    const PAYMENT_INTENT_STATUS_SUCCEEDED               = 'succeeded';
+
+    //  (Pablo - 2019-07-24) - Support for legacy Stirpe APIs
+    const PAYMENT_INTENT_STATUS_REQUIRES_SOURCE        = 'requires_source';
+    const PAYMENT_INTENT_STATUS_REQUIRES_SOURCE_ACTION = 'requires_source_action';
+
+    // --------------------------------------------------------------------------
+
     /**
      * Returns whether the driver is available to be used against the selected invoice
      *
@@ -159,7 +173,12 @@ class Stripe extends PaymentBase
             //  Create the intent
             $oPaymentIntent = PaymentIntent::create($aRequestData);
 
-            if ($oPaymentIntent->status == 'requires_source_action' && $oPaymentIntent->next_action->type == 'use_stripe_sdk') {
+            //  (Pablo - 2019-07-24) - Support for legacy Stirpe APIs
+            $bRequiresAction = in_array($oPaymentIntent->status, [
+                self::PAYMENT_INTENT_STATUS_REQUIRES_ACTION,
+                self::PAYMENT_INTENT_STATUS_REQUIRES_SOURCE_ACTION,
+            ]);
+            if ($bRequiresAction && $oPaymentIntent->next_action->type == 'use_stripe_sdk') {
 
                 $oChargeResponse->setIsSca([
                     'id' => $oPaymentIntent->id,
@@ -167,27 +186,16 @@ class Stripe extends PaymentBase
 
                 return $oChargeResponse;
 
-            } elseif ($oPaymentIntent->status !== 'succeeded') {
+            } elseif ($oPaymentIntent->status !== self::PAYMENT_INTENT_STATUS_SUCCEEDED) {
                 throw new DriverException('Invalid PaymentIntent status', 500);
             }
 
-            dd('No further action required, can complete payment', $oPaymentIntent);
+            $oCharge             = reset($oPaymentIntent->charges->data);
+            $oBalanceTransaction = BalanceTransaction::retrieve($oCharge->balance_transaction);
 
-            if ($oStripeResponse->paid) {
-
-                $oChargeResponse->setStatusComplete();
-                $oChargeResponse->setTxnId($oStripeResponse->id);
-                $oChargeResponse->setFee($oStripeResponse->balance_transaction->fee);
-
-            } else {
-
-                //  @todo (Pablo - 2019-07-22) - handle errors returned by the Stripe Client/API
-                $oChargeResponse->setStatusFailed(
-                    null,
-                    0,
-                    'The gateway rejected the request, you may wish to try again.'
-                );
-            }
+            $oChargeResponse->setStatusComplete();
+            $oChargeResponse->setTxnId($oCharge->id);
+            $oChargeResponse->setFee($oBalanceTransaction->fee);
 
         } catch (ApiConnection $e) {
 
@@ -242,6 +250,21 @@ class Stripe extends PaymentBase
 
     // --------------------------------------------------------------------------
 
+    /**
+     * Returns an arrya of request data for a PaymentIntent request
+     *
+     * @param int      $iAmount      The payment amount
+     * @param string   $sCurrency    The payment currency
+     * @param stdClass $oData        The driver data object
+     * @param stdClass $oCustomData  The custom data object
+     * @param string   $sDescription The charge description
+     * @param stdClass $oInvoice     The invoice object
+     *
+     * @return array
+     * @throws DriverException
+     * @throws FactoryException
+     * @throws ModelException
+     */
     protected function getRequestData(
         $iAmount,
         $sCurrency,
@@ -266,11 +289,6 @@ class Stripe extends PaymentBase
             'description'          => $sDescription,
             'metadata'             => $aMetaData,
             'statement_descriptor' => substr($sStatementDescriptor, 0, 22),
-
-            //  @todo (Pablo - 2019-07-22) - Handle calculating this
-            //                'expand'               => [
-            //                    'balance_transaction',
-            //                ],
         ];
 
         if ($this->getSetting('bEnableStripeReceiptEmail')) {
@@ -337,7 +355,17 @@ class Stripe extends PaymentBase
 
     // --------------------------------------------------------------------------
 
-    public function scaRequest(array $aData, string $sSuccessUrl)
+    /**
+     * Handles any SCA requests
+     *
+     * @param ScaResponse $oScaResponse The SCA Response object
+     * @param array       $aData        Any saved SCA data
+     * @param string      $sSuccessUrl  The URL to redirect to after authorisation
+     *
+     * @return ScaResponse
+     * @throws DriverException
+     */
+    public function sca(ScaResponse $oScaResponse, array $aData, string $sSuccessUrl): ScaResponse
     {
         $iPaymentIntentId = getFromArray('id', $aData);
         if (empty($iPaymentIntentId)) {
@@ -350,64 +378,100 @@ class Stripe extends PaymentBase
             throw new DriverException('Invalid Payment Intent ID');
         }
 
-        //  @todo (Pablo - 2019-07-23) - Check status
+        // --------------------------------------------------------------------------
 
-        $oPaymentIntent = $oPaymentIntent->confirm([
-            'return_url' => $sSuccessUrl,
-        ]);
-
-        if ($oPaymentIntent->status === 'requires_action' || $oPaymentIntent->status === 'requires_source_action') {
-
-            if ($oPaymentIntent->status === 'requires_action') {
-                $sUrl = $oPaymentIntent->next_action->redirect_to_url->url;
-            } else {
-                $sUrl = $oPaymentIntent->next_source_action->authorize_with_url->url;
-            }
-
-            redirect($sUrl);
-
-        } elseif ($oPaymentIntent->status === 'succeeded') {
-            //  @todo (Pablo - 2019-07-23) - Handle success scenario
-            dd('Handle success scenario', $oPaymentIntent);
-        } else {
-            //  @todo (Pablo - 2019-07-23) - handle failure
-            dd('handle failure', $oPaymentIntent);
+        //  If the SCA request has already succeeded then bail early
+        if ($oPaymentIntent->status === self::PAYMENT_INTENT_STATUS_SUCCEEDED) {
+            return $this->scaComplete($oScaResponse, $oPaymentIntent);
         }
+
+        // --------------------------------------------------------------------------
+
+        switch ($oPaymentIntent->status) {
+
+            /**
+             * These statuses indicate that the SCA has not been processed and that
+             * the client must perform the 3rd party authorisation. We'll redirect
+             * to Stripe to let that happen.
+             */
+            case self::PAYMENT_INTENT_STATUS_REQUIRES_ACTION:
+            case self::PAYMENT_INTENT_STATUS_REQUIRES_SOURCE_ACTION:
+
+                $oPaymentIntent = $oPaymentIntent->confirm([
+                    'return_url' => $sSuccessUrl,
+                ]);
+
+                if ($oPaymentIntent->status === self::PAYMENT_INTENT_STATUS_REQUIRES_ACTION) {
+                    $sUrl = $oPaymentIntent->next_action->redirect_to_url->url;
+                } else {
+                    $sUrl = $oPaymentIntent->next_source_action->authorize_with_url->url;
+                }
+
+                $oScaResponse
+                    ->setIsRedirect(true)
+                    ->setRedirectUrl($sUrl);
+
+                break;
+
+            /**
+             * This status indicates that the SCA has been authorised but needs confirmed again.
+             */
+            case self::PAYMENT_INTENT_STATUS_REQUIRES_CONFIRMATION:
+
+                try {
+
+                    $oPaymentIntent = $oPaymentIntent->confirm([
+                        'return_url' => $sSuccessUrl,
+                    ]);
+                    $this->scaComplete($oScaResponse, $oPaymentIntent);
+
+                } catch (\Exception $e) {
+                    $oScaResponse
+                        ->setIsFail(true)
+                        ->setError($e->getMessage());
+                }
+                break;
+
+            /**
+             * Any other status is considered a failure.
+             */
+            default:
+                $oScaResponse
+                    ->setIsFail(true)
+                    ->setError('Failed to authorise the payment.');
+                break;
+        }
+
+        return $oScaResponse;
     }
 
     // --------------------------------------------------------------------------
 
-    public function scaComplete(array $aData)
+    /**
+     * Performs actions required once the SCA flow is complete
+     *
+     * @param ScaResponse   $oScaResponse   The SCA Response object
+     * @param PaymentIntent $oPaymentIntent The Payment Intent object
+     *
+     * @return ScaResponse
+     * @throws DriverException
+     */
+    protected function scaComplete(ScaResponse $oScaResponse, PaymentIntent $oPaymentIntent): ScaResponse
     {
-        $iPaymentIntentId = getFromArray('id', $aData);
-        if (empty($iPaymentIntentId)) {
-            throw new DriverException('Missing Payment Intent ID');
+        $oCharge = reset($oPaymentIntent->charges->data);
+        if (empty($oCharge)) {
+            throw new DriverException('No charges detected. Payment was not processed.');
         }
 
-        $this->setApiKey();
-        $oPaymentIntent = PaymentIntent::retrieve($iPaymentIntentId);
-        if (empty($oPaymentIntent)) {
-            throw new DriverException('Invalid Payment Intent ID');
-        }
+        //  Get the balance transaction
+        $oBalanceTransaction = BalanceTransaction::retrieve($oCharge->balance_transaction);
 
-        //  Check status
-        if ($oPaymentIntent->status !== 'requires_confirmation') {
-            //  @todo (Pablo - 2019-07-23) - handle this
-            dd('Unexpected status');
-        }
+        $oScaResponse
+            ->setIsComplete(true)
+            ->setTransactionId($oCharge->id)
+            ->setTransactionFee($oBalanceTransaction->fee);
 
-        $oPaymentIntent = $oPaymentIntent->confirm();
-        if ($oPaymentIntent->status !== 'succeeded') {
-            //  @todo (Pablo - 2019-07-23) - handle this
-            dd('did not succeed');
-        }
-
-        //  @todo (Pablo - 2019-07-23) - Return payment detals
-        dd(
-            'complete',
-            $oPaymentIntent->status,
-            $oPaymentIntent
-        );
+        return $oScaResponse;
     }
 
     // --------------------------------------------------------------------------
