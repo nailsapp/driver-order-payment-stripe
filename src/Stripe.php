@@ -113,7 +113,7 @@ class Stripe extends PaymentBase
             [
                 'checkout.min.js?' . implode('&', [
                     'hash=' . urlencode(md5($this->getSlug())) . '',
-                    'key=' . urlencode($this->getSetting('sKeyTestPublic')) . '',
+                    'key=' . urlencode($this->getApiKey('public')) . '',
                 ]),
                 $this->getSlug(),
                 'JS',
@@ -581,17 +581,30 @@ class Stripe extends PaymentBase
      */
     protected function setApiKey(): void
     {
+        \Stripe\Stripe::setApiKey($this->getApiKey());
+    }
+
+    // --------------------------------------------------------------------------
+
+
+    /**
+     * Returns the correct API key for the environment
+     *
+     * @return string
+     */
+    protected function getApiKey(string $sType = 'secret'): string
+    {
         if (Environment::is(Environment::ENV_PROD)) {
-            $sApiKey = $this->getSetting('sKeyLiveSecret');
+            $sApiKey = $this->getSetting('sKeyLive' . ucfirst(strtolower($sType)));
         } else {
-            $sApiKey = $this->getSetting('sKeyTestSecret');
+            $sApiKey = $this->getSetting('sKeyTest' . ucfirst(strtolower($sType)));
         }
 
         if (empty($sApiKey)) {
             throw new DriverException('Missing Stripe API Key.', 1);
         }
 
-        \Stripe\Stripe::setApiKey($sApiKey);
+        return $sApiKey;
     }
 
     // --------------------------------------------------------------------------
