@@ -1,14 +1,32 @@
 import Utilities from './Utilities';
 
+const DRIVER = 'nails/driver-invoice-stripe';
+
 class Checkout {
+
+    /**
+     * Cosntruct Checkout
+     */
     constructor() {
 
-        this.params = Utilities.getParams('vendor/nails/driver-invoice-stripe/assets/js/checkout.min.js');
+        this.params = Utilities.getParams('vendor/' + DRIVER + '/assets/js/checkout.min.js');
+        this.hash = this.params.hash;
+        this.key = this.params.key;
 
+        this.prepareForm();
+        this.bindEvents();
+        this.registerValidator();
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Prepares the form
+     */
+    prepareForm() {
         //  Prepare the form
         //  Replace the input with a <div>
-
-        let id = '#stripe-elements-' + this.params.hash;
+        let id = '#stripe-elements-' + this.hash;
         let $original = $(id);
 
         this.$form = $('#js-invoice-main-form');
@@ -26,7 +44,7 @@ class Checkout {
             .replaceWith(this.$group);
 
         //  Build Stripe element
-        this.stripe = Stripe(this.params.key);
+        this.stripe = Stripe(this.key);
         this.elements = this.stripe.elements();
 
         // Create an instance of the card Element.
@@ -34,7 +52,14 @@ class Checkout {
 
         //  Bind to the DOM
         this.card.mount(id);
+    }
 
+    // --------------------------------------------------------------------------
+
+    /**
+     * Binds to user events
+     */
+    bindEvents() {
         //  Show user errors
         this
             .card
@@ -45,44 +70,50 @@ class Checkout {
                     this.hideError();
                 }
             });
-
-        //  Bind to form submission
-        this
-            .$form
-            .on('submit', (e) => {
-
-                if (this.$input.val().length === 0) {
-
-                    e.preventDefault();
-                    $('#js-invoice-pay-now')
-                        .addClass('btn--working')
-                        .prop('disabled', true);
-
-                    this
-                        .stripe
-                        .createToken(this.card)
-                        .then((result) => {
-
-                            if (result.error) {
-
-                                this.showError(result.error.message);
-                                $('#js-invoice-pay-now')
-                                    .removeClass('btn--working')
-                                    .prop('disabled', false);
-
-                            } else {
-
-                                this.hideError()
-                                this.$input.val(result.token.id);
-                                this.$form.submit();
-                            }
-                        });
-                }
-            })
     }
 
     // --------------------------------------------------------------------------
 
+    /**
+     * Registers the validator
+     */
+    registerValidator() {
+        this.$form
+            .data('validators')
+            .push({
+                'slug': DRIVER,
+                'instance': this
+            });
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Validates the form, and generates the card token
+     * @param deferred
+     */
+    validate(deferred) {
+
+        this
+            .stripe
+            .createToken(this.card)
+            .then((result) => {
+
+                if (result.error) {
+                    deferred.reject(result.error.message);
+                } else {
+                    this.$input.val(result.token.id);
+                    deferred.resolve();
+                }
+            });
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Shows the error field
+     * @param error
+     */
     showError(error) {
         this.$error.html(error);
         this.$elements.addClass('has-error');
@@ -90,6 +121,9 @@ class Checkout {
 
     // --------------------------------------------------------------------------
 
+    /**
+     * Hides the error field
+     */
     hideError() {
         this.$error.html('');
         this.$elements.removeClass('has-error');
