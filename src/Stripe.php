@@ -311,7 +311,7 @@ class Stripe extends PaymentBase
 
             /** @var Source $oStripeSourceModel */
             $oStripeSourceModel = Factory::model('Source', 'nails/driver-invoice-stripe');
-            $oSource            = $oStripeSourceModel->getById($oCustomData->id);
+            $oSource            = $oStripeSourceModel->getById($oCustomData->source_id);
             if (empty($oSource)) {
                 throw new DriverException('Invalid payment source supplied.');
             }
@@ -333,21 +333,7 @@ class Stripe extends PaymentBase
             ];
 
         } else {
-
-            //  @todo (Pablo - 2019-07-22) - Handle this flow
-            dd('Handle passing card details');
-
-            /**
-             * The customer is checking out using card details
-             */
-            $aRequestData['source'] = [
-                'object'    => 'card',
-                'name'      => $oData->name,
-                'number'    => $oData->number,
-                'exp_month' => $oData->exp->month,
-                'exp_year'  => $oData->exp->year,
-                'cvc'       => $oData->cvc,
-            ];
+            throw new DriverException('Must provide `token` or `source_id`.');
         }
 
         return $aRequestData;
@@ -586,7 +572,6 @@ class Stripe extends PaymentBase
 
     // --------------------------------------------------------------------------
 
-
     /**
      * Returns the correct API key for the environment
      *
@@ -685,6 +670,8 @@ class Stripe extends PaymentBase
      */
     public function addPaymentSource($iCustomerId, $mSourceData, $sSourceLabel = '')
     {
+        //  @todo (Pablo - 2019-07-31) - Replace this with a centralised card system
+
         //  Set the API key to use
         $this->setApiKey();
 
@@ -764,6 +751,8 @@ class Stripe extends PaymentBase
      */
     public function removePaymentSource($iCustomerId, $iSourceId)
     {
+        //  @todo (Pablo - 2019-07-31) - Replace this with a centralised card system
+
         /** @var Source $oStripeSourceModel */
         $oStripeSourceModel = Factory::model('Source', 'nails/driver-invoice-stripe');
         $aSources           = $oStripeSourceModel->getAll([
@@ -779,8 +768,6 @@ class Stripe extends PaymentBase
 
         $oSource = reset($aSources);
 
-        //  @todo (Pablo - 2018-01-29) - Delete from Stripe
-
         return $oStripeSourceModel->delete($oSource->id);
     }
 
@@ -795,6 +782,8 @@ class Stripe extends PaymentBase
      */
     public function getPaymentSources($iCustomerId)
     {
+        //  @todo (Pablo - 2019-07-31) - Replace this with a centralised card system
+
         /** @var Source $oStripeSourceModel */
         $oStripeSourceModel = Factory::model('Source', 'nails/driver-invoice-stripe');
         return $oStripeSourceModel->getAll([
