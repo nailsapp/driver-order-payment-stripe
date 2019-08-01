@@ -52,6 +52,9 @@ class Checkout {
 
         //  Bind to the DOM
         this.card.mount(id);
+
+        //  Hide the label, for aesthetics
+        $('label[for="' + id.replace(/^#/, '') + '"]').hide();
     }
 
     // --------------------------------------------------------------------------

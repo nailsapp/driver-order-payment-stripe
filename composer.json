@@ -76,34 +76,34 @@
                         "default": false
                     },
                     {
-                        "legend": "Test API Keys",
+                        "legend": "API Keys - Test",
                         "fields": [
                             {
-                                "key": "sKeyTestSecret",
-                                "label": "Secret Key",
+                                "key": "sKeyTestPublic",
+                                "label": "Publishable Key",
                                 "type": "password",
                                 "encrypted": true
                             },
                             {
-                                "key": "sKeyTestPublic",
-                                "label": "Public Key",
+                                "key": "sKeyTestSecret",
+                                "label": "Secret Key",
                                 "type": "password",
                                 "encrypted": true
                             }
                         ]
                     },
                     {
-                        "legend": "Live API Keys",
+                        "legend": "API Keys - Live",
                         "fields": [
                             {
-                                "key": "sKeyLiveSecret",
-                                "label": "Secret Key",
+                                "key": "sKeyLivePublic",
+                                "label": "Publishable Key",
                                 "type": "password",
                                 "encrypted": true
                             },
                             {
-                                "key": "sKeyLivePublic",
-                                "label": "Public Key",
+                                "key": "sKeyLiveSecret",
+                                "label": "Secret Key",
                                 "type": "password",
                                 "encrypted": true
                             }

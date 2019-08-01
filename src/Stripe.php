@@ -14,6 +14,7 @@ namespace Nails\Invoice\Driver\Payment;
 
 use Nails\Common\Exception\FactoryException;
 use Nails\Common\Exception\ModelException;
+use Nails\Common\Resource;
 use Nails\Environment;
 use Nails\Factory;
 use Nails\Invoice\Driver\Payment\Stripe\Model\Source;
@@ -24,7 +25,9 @@ use Nails\Invoice\Factory\CompleteResponse;
 use Nails\Invoice\Factory\RefundResponse;
 use Nails\Invoice\Factory\ScaResponse;
 use stdClass;
+use Stripe\Account;
 use Stripe\BalanceTransaction;
+use Stripe\CountrySpec;
 use Stripe\Customer;
 use Stripe\Error\Api;
 use Stripe\Error\ApiConnection;
@@ -32,6 +35,7 @@ use Stripe\Error\Card;
 use Stripe\Error\InvalidRequest;
 use Stripe\PaymentIntent;
 use Stripe\Refund;
+use Stripe\Token;
 
 /**
  * Class Stripe
@@ -52,13 +56,29 @@ class Stripe extends PaymentBase
     // --------------------------------------------------------------------------
 
     /**
+     * Whetehr the driver has attemped to fetch supported currencies
+     *
+     * @var bool
+     */
+    private static $bFetchedSupportedCurrencies = false;
+
+    /**
+     * The supported currencies for this configuration
+     *
+     * @var stirng[]|null
+     */
+    private static $aSupportedCurrencies = null;
+
+    // --------------------------------------------------------------------------
+
+    /**
      * Returns whether the driver is available to be used against the selected invoice
      *
      * @param stdClass $oInvoice The invoice being charged
      *
-     * @return boolean
+     * @return bool
      */
-    public function isAvailable($oInvoice)
+    public function isAvailable($oInvoice): bool
     {
         return true;
     }
@@ -66,11 +86,42 @@ class Stripe extends PaymentBase
     // --------------------------------------------------------------------------
 
     /**
+     * Returns the currencies which this driver supports, it will only be presented
+     * when attempting to pay an invoice in a supported currency
+     *
+     * @return string[]|null
+     */
+    public function getSupportedCurrencies(): ?array
+    {
+        if (!self::$bFetchedSupportedCurrencies) {
+
+            //  So we don't try again
+            self::$bFetchedSupportedCurrencies = true;
+
+            try {
+
+                $this->setApiKey();
+                $oAccount = Account::retrieve($this->getApiKey());
+                $oCountry = CountrySpec::retrieve($oAccount->country);
+
+                self::$aSupportedCurrencies = array_map('strtoupper', $oCountry->supported_payment_currencies);
+
+            } catch (\Exception $e) {
+                //  @todo (Pablo - 2019-08-01) - shout about this?
+            }
+        }
+
+        return self::$aSupportedCurrencies;
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
      * Returns whether the driver uses a redirect payment flow or not.
      *
-     * @return boolean
+     * @return bool
      */
-    public function isRedirect()
+    public function isRedirect(): bool
     {
         return false;
     }
@@ -126,7 +177,7 @@ class Stripe extends PaymentBase
     /**
      * Initiate a payment
      *
-     * @param integer  $iAmount      The payment amount
+     * @param int      $iAmount      The payment amount
      * @param string   $sCurrency    The payment currency
      * @param stdClass $oData        The driver data object
      * @param stdClass $oCustomData  The custom data object
@@ -150,7 +201,7 @@ class Stripe extends PaymentBase
         $sSuccessUrl,
         $sFailUrl,
         $sContinueUrl
-    ) {
+    ): ChargeResponse {
 
         /** @var ChargeResponse $oChargeResponse */
         $oChargeResponse = Factory::factory('ChargeResponse', 'nails/module-invoice');
@@ -472,7 +523,7 @@ class Stripe extends PaymentBase
      *
      * @return CompleteResponse
      */
-    public function complete($oPayment, $oInvoice, $aGetVars, $aPostVars)
+    public function complete($oPayment, $oInvoice, $aGetVars, $aPostVars): CompleteResponse
     {
         /** @var CompleteResponse $oCompleteResponse */
         $oCompleteResponse = Factory::factory('CompleteResponse', 'nails/module-invoice');
@@ -486,7 +537,7 @@ class Stripe extends PaymentBase
      * Issue a refund for a payment
      *
      * @param string   $sTxnId      The original transaction's ID
-     * @param integer  $iAmount     The amount to refund
+     * @param int      $iAmount     The amount to refund
      * @param string   $sCurrency   The currency in which to refund
      * @param stdClass $oCustomData The custom data object
      * @param string   $sReason     The refund's reason
@@ -495,7 +546,7 @@ class Stripe extends PaymentBase
      *
      * @return RefundResponse
      */
-    public function refund($sTxnId, $iAmount, $sCurrency, $oCustomData, $sReason, $oPayment, $oInvoice)
+    public function refund($sTxnId, $iAmount, $sCurrency, $oCustomData, $sReason, $oPayment, $oInvoice): RefundResponse
     {
         /** @var RefundResponse $oRefundResponse */
         $oRefundResponse = Factory::factory('RefundResponse', 'nails/module-invoice');
@@ -638,11 +689,11 @@ class Stripe extends PaymentBase
     /**
      * Returns the stripe reference for a customer if one exists
      *
-     * @param $iCustomerId integer The customer ID to retrieve for
+     * @param $iCustomerId int The customer ID to retrieve for
      *
-     * @return integer|null
+     * @return int|null
      */
-    public function getStripeCustomerId($iCustomerId)
+    public function getStripeCustomerId($iCustomerId): ?int
     {
         /** @var \Nails\Invoice\Model\Customer $oStripeCustomerModel */
         $oStripeCustomerModel = Factory::model('Customer', 'nails/driver-invoice-stripe');
@@ -661,14 +712,14 @@ class Stripe extends PaymentBase
     /**
      * Adds a payment source to a customer
      *
-     * @param  $iCustomerId  integer      The customer ID to associate the payment source with
+     * @param  $iCustomerId  int      The customer ID to associate the payment source with
      * @param  $mSourceData  string|array The payment source data to pass to Stripe; a token or an associative array
      * @param  $sSourceLabel string       The label (or nickname) to give the card
      *
-     * @return stdClass                  The source object
+     * @return \stdClass                  The source object
      * @throws DriverException
      */
-    public function addPaymentSource($iCustomerId, $mSourceData, $sSourceLabel = '')
+    public function addPaymentSource($iCustomerId, $mSourceData, $sSourceLabel = ''): \stdClass
     {
         //  @todo (Pablo - 2019-07-31) - Replace this with a centralised card system
 
@@ -743,13 +794,13 @@ class Stripe extends PaymentBase
     /**
      * Deletes a customer payment source
      *
-     * @param integer $iCustomerId The customer ID to associate the payment source with
-     * @param integer $iSourceId   The payment source ID
+     * @param int $iCustomerId The customer ID to associate the payment source with
+     * @param int $iSourceId   The payment source ID
      *
      * @return bool
      * @throws DriverException
      */
-    public function removePaymentSource($iCustomerId, $iSourceId)
+    public function removePaymentSource($iCustomerId, $iSourceId): bool
     {
         //  @todo (Pablo - 2019-07-31) - Replace this with a centralised card system
 
@@ -776,11 +827,11 @@ class Stripe extends PaymentBase
     /**
      * Returns an array of Stripe payment sources for a particular customer ID
      *
-     * @param $iCustomerId integer The customer ID to retrieve for
+     * @param $iCustomerId int The customer ID to retrieve for
      *
-     * @return array
+     * @return Resource[]
      */
-    public function getPaymentSources($iCustomerId)
+    public function getPaymentSources($iCustomerId): array
     {
         //  @todo (Pablo - 2019-07-31) - Replace this with a centralised card system
 
