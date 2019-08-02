@@ -229,6 +229,7 @@ class Stripe extends PaymentBase
                 self::PAYMENT_INTENT_STATUS_REQUIRES_ACTION,
                 self::PAYMENT_INTENT_STATUS_REQUIRES_SOURCE_ACTION,
             ]);
+
             if ($bRequiresAction && $oPaymentIntent->next_action->type == 'use_stripe_sdk') {
 
                 $oChargeResponse->setIsSca([
@@ -350,32 +351,34 @@ class Stripe extends PaymentBase
             }
         }
 
-        //  Prep the source - if $oCustomData has a `source` property then use that over any supplied card details
-        if (property_exists($oCustomData, 'source_id')) {
-
-            //  @todo (Pablo - 2019-07-22) - Handle this flow
-            dd('Handle passing source_id and customer_id');
+        if (property_exists($oCustomData, 'source_id') && property_exists($oCustomData, 'customer_id')) {
 
             /**
-             * The customer is chekcing out using a saved payment source
+             * The customer is checking out using a saved payment source
              */
-
             /** @var Source $oStripeSourceModel */
             $oStripeSourceModel = Factory::model('Source', 'nails/driver-invoice-stripe');
-            $oSource            = $oStripeSourceModel->getById($oCustomData->source_id);
-            if (empty($oSource)) {
-                throw new DriverException('Invalid payment source supplied.');
+            /** @var Source $oStripeCustomerModel */
+            $oStripeCustomerModel = Factory::model('Customer', 'nails/driver-invoice-stripe');
+
+            $oStripeSource = $oStripeSourceModel->getById($oCustomData->source_id);
+            if (empty($oStripeSource)) {
+                throw new DriverException('Invalid source ID supplied.');
             }
 
-            $aRequestData['payment_method'] = $oSource->stripe_id;
-            $aRequestData['customer']       = $oSource->customer_id;
+            $oStripeCustomer = $oStripeCustomerModel->getById($oCustomData->customer_id);
+            if (empty($oStripeCustomer)) {
+                throw new DriverException('Invalid customer ID supplied.');
+            }
+
+            $aRequestData['payment_method'] = $oStripeSource->stripe_id;
+            $aRequestData['customer']       = $oStripeCustomer->stripe_id;
 
         } elseif (property_exists($oCustomData, 'token')) {
 
             /**
              * The customer is checking out using a Stripe token
              */
-
             $aRequestData['payment_method_data'] = [
                 'type' => 'card',
                 'card' => [
