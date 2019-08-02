@@ -386,6 +386,14 @@ class Stripe extends PaymentBase
                 ],
             ];
 
+        } elseif (property_exists($oCustomData, 'stripe_source_id') && property_exists($oCustomData, 'stripe_customer_id')) {
+
+            /**
+             * Dev has passed explicit stripe source and customer IDs
+             */
+            $aRequestData['payment_method'] = $oCustomData->stripe_source_id;
+            $aRequestData['customer']       = $oCustomData->stripe_customer_id;
+
         } else {
             throw new DriverException('Must provide `token` or `source_id`.');
         }
