@@ -17,13 +17,13 @@ use Nails\Common\Exception\ModelException;
 use Nails\Common\Resource;
 use Nails\Environment;
 use Nails\Factory;
-use Nails\Invoice\Driver\Payment\Stripe\Model\Source;
 use Nails\Invoice\Driver\PaymentBase;
 use Nails\Invoice\Exception\DriverException;
 use Nails\Invoice\Factory\ChargeResponse;
 use Nails\Invoice\Factory\CompleteResponse;
 use Nails\Invoice\Factory\RefundResponse;
 use Nails\Invoice\Factory\ScaResponse;
+use Nails\Invoice\Model\Source;
 use stdClass;
 use Stripe\Account;
 use Stripe\BalanceTransaction;
@@ -185,8 +185,7 @@ class Stripe extends PaymentBase
      * @param stdClass $oPayment     The payment object
      * @param stdClass $oInvoice     The invoice object
      * @param string   $sSuccessUrl  The URL to go to after successful payment
-     * @param string   $sFailUrl     The URL to go to after failed payment
-     * @param string   $sContinueUrl The URL to go to after payment is completed
+     * @param string   $sErrorUrl    The URL to go to after failed payment
      *
      * @return ChargeResponse
      */
@@ -199,8 +198,7 @@ class Stripe extends PaymentBase
         $oPayment,
         $oInvoice,
         $sSuccessUrl,
-        $sFailUrl,
-        $sContinueUrl
+        $sErrorUrl
     ): ChargeResponse {
 
         /** @var ChargeResponse $oChargeResponse */
@@ -351,28 +349,30 @@ class Stripe extends PaymentBase
             }
         }
 
-        if (property_exists($oCustomData, 'source_id') && property_exists($oCustomData, 'customer_id')) {
+        if (property_exists($oCustomData, 'source_id')) {
 
             /**
              * The customer is checking out using a saved payment source
              */
-            /** @var Source $oStripeSourceModel */
-            $oStripeSourceModel = Factory::model('Source', 'nails/driver-invoice-stripe');
-            /** @var Source $oStripeCustomerModel */
-            $oStripeCustomerModel = Factory::model('Customer', 'nails/driver-invoice-stripe');
-
-            $oStripeSource = $oStripeSourceModel->getById($oCustomData->source_id);
-            if (empty($oStripeSource)) {
+            /** @var Source $oSourceModel */
+            $oSourceModel = Factory::model('Source', 'nails/module-invoice');
+            $oSource      = $oSourceModel->getById($oCustomData->source_id);
+            if (empty($oSource)) {
                 throw new DriverException('Invalid source ID supplied.');
             }
 
-            $oStripeCustomer = $oStripeCustomerModel->getById($oCustomData->customer_id);
-            if (empty($oStripeCustomer)) {
-                throw new DriverException('Invalid customer ID supplied.');
+            $aSourceData = json_decode($oSource->data, JSON_OBJECT_AS_ARRAY) ?? [];
+            $sSourceId   = getFromArray('source_id', $aSourceData);
+            $sCustomerId = getFromArray('customer_id', $aSourceData);
+
+            if (empty($sSourceId)) {
+                throw new DriverException('Could not acertain the "source_id" from the Source object.');
+            } elseif (empty($sCustomerId)) {
+                throw new DriverException('Could not acertain the "customer_id" from the Source object.');
             }
 
-            $aRequestData['payment_method'] = $oStripeSource->stripe_id;
-            $aRequestData['customer']       = $oStripeCustomer->stripe_id;
+            $aRequestData['payment_method'] = $sSourceId;
+            $aRequestData['customer']       = $sCustomerId;
 
         } elseif (property_exists($oCustomData, 'token')) {
 
@@ -475,8 +475,16 @@ class Stripe extends PaymentBase
 
                 } catch (\Exception $e) {
                     $oScaResponse
-                        ->setIsFail(true)
-                        ->setError($e->getMessage());
+                        ->setStatusFailed(
+                            implode(' ', [
+                                'Failed to authorise the payment.',
+                                'Exception: ' . $e->getMessage(),
+                                'Payment Intent ID: ' . $oPaymentIntent->id,
+                                'Payment Intent status: ' . $oPaymentIntent->status,
+                            ]),
+                            $e->getCode() ?? '',
+                            'Failed to authorise the payment.'
+                        );
                 }
                 break;
 
@@ -485,8 +493,15 @@ class Stripe extends PaymentBase
              */
             default:
                 $oScaResponse
-                    ->setIsFail(true)
-                    ->setError('Failed to authorise the payment.');
+                    ->setStatusFailed(
+                        implode(' ', [
+                            'Failed to authorise the payment.',
+                            'Payment Intent ID: ' . $oPaymentIntent->id,
+                            'Payment Intent status: ' . $oPaymentIntent->status,
+                        ]),
+                        '',
+                        'Failed to authorise the payment.'
+                    );
                 break;
         }
 
@@ -516,8 +531,8 @@ class Stripe extends PaymentBase
 
         $oScaResponse
             ->setIsComplete(true)
-            ->setTransactionId($oCharge->id)
-            ->setTransactionFee($oBalanceTransaction->fee);
+            ->setTxnId($oCharge->id)
+            ->setFee($oBalanceTransaction->fee);
 
         return $oScaResponse;
     }
@@ -888,7 +903,7 @@ class Stripe extends PaymentBase
         $oStripeSource = $oStripeCustomer->sources->create(['source' => $sSourceId]);
         $oExpiry       = new \DateTime(implode('-', [
             $oStripeSource->card->exp_year,
-            $oStripeSource->card->exp_mont,
+            $oStripeSource->card->exp_month,
             '01',
         ]));
 
