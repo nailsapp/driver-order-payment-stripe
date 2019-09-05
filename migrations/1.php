@@ -1,22 +1,20 @@
 <?php
 
 /**
- * Migration:   0
- * Started:     16/06/2016
- * Finalised:
+ * Migration:   1
+ * Started:     2019-09-05
  *
  * @package     Nails
  * @subpackage  driver-invoice-stripe
  * @category    Database Migration
  * @author      Nails Dev Team
- * @link
  */
 
 namespace Nails\Database\Migration\Nails\DriverInvoiceStripe;
 
 use Nails\Common\Console\Migrate\Base;
 
-class Migration0 extends Base
+class Migration1 extends Base
 {
     /**
      * Execute the migration
