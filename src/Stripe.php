@@ -56,7 +56,7 @@ class Stripe extends PaymentBase
     // --------------------------------------------------------------------------
 
     /**
-     * Whetehr the driver has attemped to fetch supported currencies
+     * Whether the driver has attemped to fetch supported currencies
      *
      * @var bool
      */
@@ -852,6 +852,52 @@ class Stripe extends PaymentBase
             'where' => [
                 ['customer_id', $iCustomerId],
             ],
+        ]);
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Creates a new payment source, returns a semi-populated source resource
+     *
+     * @param \Nails\Invoice\Resource\Source $oResource The Resouce object to update
+     * @param array                          $aData     Data passed from the caller
+     *
+     * @throws DriverException
+     */
+    public function createSource(
+        \Nails\Invoice\Resource\Source &$oResource,
+        array $aData
+    ): void {
+
+        $sSourceId   = getFromArray('stripe_source_id', $aData);
+        $sCustomerId = getFromArray('stripe_customer_id', $aData);
+
+        if (empty($sSourceId)) {
+            throw new DriverException('"stripe_source_id" must be supplied when creating a Stripe payment source.');
+        }
+
+        $this->setApiKey();
+
+        if (empty($sCustomerId)) {
+            $oStripeCustomer = \Stripe\Customer::create();
+        } else {
+            $oStripeCustomer = \Stripe\Customer::retrieve($sCustomerId);
+        }
+
+        $oStripeSource = $oStripeCustomer->sources->create(['source' => $sSourceId]);
+        $oExpiry       = new \DateTime(implode('-', [
+            $oStripeSource->card->exp_year,
+            $oStripeSource->card->exp_mont,
+            '01',
+        ]));
+
+        $oResource->brand     = $oStripeSource->card->brand;
+        $oResource->last_four = $oStripeSource->card->last4;
+        $oResource->expiry    = $oExpiry->format('Y-m-t H:i:s');
+        $oResource->data      = json_encode([
+            'source_id'   => $oStripeSource->id,
+            'customer_id' => $oStripeCustomer->id,
         ]);
     }
 }
