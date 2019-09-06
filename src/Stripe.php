@@ -17,6 +17,7 @@ use Nails\Common\Exception\ModelException;
 use Nails\Common\Resource;
 use Nails\Environment;
 use Nails\Factory;
+use Nails\Invoice\Constants;
 use Nails\Invoice\Driver\PaymentBase;
 use Nails\Invoice\Exception\DriverException;
 use Nails\Invoice\Factory\ChargeResponse;
@@ -201,7 +202,7 @@ class Stripe extends PaymentBase
     ): ChargeResponse {
 
         /** @var ChargeResponse $oChargeResponse */
-        $oChargeResponse = Factory::factory('ChargeResponse', 'nails/module-invoice');
+        $oChargeResponse = Factory::factory('ChargeResponse', Constants::MODULE_SLUG);
 
         try {
 
@@ -354,7 +355,7 @@ class Stripe extends PaymentBase
              * The customer is checking out using a saved payment source
              */
             /** @var Source $oSourceModel */
-            $oSourceModel = Factory::model('Source', 'nails/module-invoice');
+            $oSourceModel = Factory::model('Source', Constants::MODULE_SLUG);
             $oSource      = $oSourceModel->getById($oCustomData->source_id);
             if (empty($oSource)) {
                 throw new DriverException('Invalid source ID supplied.');
@@ -551,7 +552,7 @@ class Stripe extends PaymentBase
     public function complete($oPayment, $oInvoice, $aGetVars, $aPostVars): CompleteResponse
     {
         /** @var CompleteResponse $oCompleteResponse */
-        $oCompleteResponse = Factory::factory('CompleteResponse', 'nails/module-invoice');
+        $oCompleteResponse = Factory::factory('CompleteResponse', Constants::MODULE_SLUG);
         $oCompleteResponse->setStatusComplete();
         return $oCompleteResponse;
     }
@@ -574,7 +575,7 @@ class Stripe extends PaymentBase
     public function refund($sTxnId, $iAmount, $sCurrency, $oCustomData, $sReason, $oPayment, $oInvoice): RefundResponse
     {
         /** @var RefundResponse $oRefundResponse */
-        $oRefundResponse = Factory::factory('RefundResponse', 'nails/module-invoice');
+        $oRefundResponse = Factory::factory('RefundResponse', Constants::MODULE_SLUG);
 
         try {
 
@@ -707,166 +708,6 @@ class Stripe extends PaymentBase
         }
 
         return $aCleanMetaData;
-    }
-
-    // --------------------------------------------------------------------------
-
-    /**
-     * Returns the stripe reference for a customer if one exists
-     *
-     * @param $iCustomerId int The customer ID to retrieve for
-     *
-     * @return int|null
-     */
-    public function getStripeCustomerId($iCustomerId): ?int
-    {
-        /** @var \Nails\Invoice\Model\Customer $oStripeCustomerModel */
-        $oStripeCustomerModel = Factory::model('Customer', 'nails/driver-invoice-stripe');
-
-        $aResult = $oStripeCustomerModel->getAll([
-            'where' => [
-                ['customer_id', $iCustomerId],
-            ],
-        ]);
-
-        return !empty($aResult) ? $aResult[0]->stripe_id : null;
-    }
-
-    // --------------------------------------------------------------------------
-
-    /**
-     * Adds a payment source to a customer
-     *
-     * @param  $iCustomerId  int      The customer ID to associate the payment source with
-     * @param  $mSourceData  string|array The payment source data to pass to Stripe; a token or an associative array
-     * @param  $sSourceLabel string       The label (or nickname) to give the card
-     *
-     * @return \stdClass                  The source object
-     * @throws DriverException
-     */
-    public function addPaymentSource($iCustomerId, $mSourceData, $sSourceLabel = ''): \stdClass
-    {
-        //  @todo (Pablo - 2019-07-31) - Replace this with a centralised card system
-
-        //  Set the API key to use
-        $this->setApiKey();
-
-        //  Check to see if we already know the customer's Stripe reference
-        $sStripeCustomerId = $this->getStripeCustomerId($iCustomerId);
-
-        if (empty($sStripeCustomerId)) {
-
-            //  Create a new Stripe customer
-            $oCustomer = Customer::create([
-                'description' => 'Customer #' . $iCustomerId,
-            ]);
-
-            //  Associate it with the local customer
-            /** @var \Nails\Invoice\Model\Customer $oStripeCustomerModel */
-            $oStripeCustomerModel = Factory::model('Customer', 'nails/driver-invoice-stripe');
-
-            $aData = [
-                'customer_id' => $iCustomerId,
-                'stripe_id'   => $oCustomer->id,
-            ];
-
-            if (!$oStripeCustomerModel->create($aData)) {
-                throw new DriverException(
-                    'Failed to associate Stripe Customer with the Local Customer. ' . $oStripeCustomerModel->lastError()
-                );
-            }
-
-        } else {
-
-            //  Retrieve the customer
-            $oCustomer = Customer::retrieve($sStripeCustomerId);
-        }
-
-        //  Save the payment source against the customer
-        $oSource = $oCustomer->sources->create([
-            'source' => $mSourceData,
-        ]);
-
-        $oCard = !empty($oSource->card) ? $oSource->card : $oSource;
-
-        //  Save the payment source locally
-        /** @var Source $oStripeSourceModel */
-        $oStripeSourceModel = Factory::model('Source', 'nails/driver-invoice-stripe');
-        $oSource            = $oStripeSourceModel->create(
-            [
-                'label'       => $sSourceLabel ?: $oCard->brand . ' card ending in ' . $oCard->last4,
-                'customer_id' => $iCustomerId,
-                'stripe_id'   => $oSource->id,
-                'last4'       => $oCard->last4,
-                'brand'       => $oCard->brand,
-                'exp_month'   => $oCard->exp_month,
-                'exp_year'    => $oCard->exp_year,
-            ],
-            true
-        );
-
-        if (!$oSource) {
-            throw new DriverException(
-                'Failed to save payment source. ' . $oStripeSourceModel->lastError()
-            );
-        }
-
-        return $oSource;
-    }
-
-    // --------------------------------------------------------------------------
-
-    /**
-     * Deletes a customer payment source
-     *
-     * @param int $iCustomerId The customer ID to associate the payment source with
-     * @param int $iSourceId   The payment source ID
-     *
-     * @return bool
-     * @throws DriverException
-     */
-    public function removePaymentSource($iCustomerId, $iSourceId): bool
-    {
-        //  @todo (Pablo - 2019-07-31) - Replace this with a centralised card system
-
-        /** @var Source $oStripeSourceModel */
-        $oStripeSourceModel = Factory::model('Source', 'nails/driver-invoice-stripe');
-        $aSources           = $oStripeSourceModel->getAll([
-            'where' => [
-                ['id', $iSourceId],
-                ['customer_id', $iCustomerId],
-            ],
-        ]);
-
-        if (count($aSources) !== 1) {
-            throw new DriverException('Not a valid payment source for customer #' . $iCustomerId);
-        }
-
-        $oSource = reset($aSources);
-
-        return $oStripeSourceModel->delete($oSource->id);
-    }
-
-    // --------------------------------------------------------------------------
-
-    /**
-     * Returns an array of Stripe payment sources for a particular customer ID
-     *
-     * @param $iCustomerId int The customer ID to retrieve for
-     *
-     * @return Resource[]
-     */
-    public function getPaymentSources($iCustomerId): array
-    {
-        //  @todo (Pablo - 2019-07-31) - Replace this with a centralised card system
-
-        /** @var Source $oStripeSourceModel */
-        $oStripeSourceModel = Factory::model('Source', 'nails/driver-invoice-stripe');
-        return $oStripeSourceModel->getAll([
-            'where' => [
-                ['customer_id', $iCustomerId],
-            ],
-        ]);
     }
 
     // --------------------------------------------------------------------------
