@@ -35,7 +35,6 @@ use Stripe\Error\Card;
 use Stripe\Error\InvalidRequest;
 use Stripe\PaymentIntent;
 use Stripe\Refund;
-use Stripe\Token;
 
 /**
  * Class Stripe
