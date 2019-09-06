@@ -15,6 +15,7 @@ namespace Nails\Invoice\Driver\Payment;
 use Nails\Common\Exception\FactoryException;
 use Nails\Common\Exception\ModelException;
 use Nails\Common\Resource;
+use Nails\Currency\Resource\Currency;
 use Nails\Environment;
 use Nails\Factory;
 use Nails\Invoice\Constants;
@@ -25,6 +26,8 @@ use Nails\Invoice\Factory\CompleteResponse;
 use Nails\Invoice\Factory\RefundResponse;
 use Nails\Invoice\Factory\ScaResponse;
 use Nails\Invoice\Model\Source;
+use Nails\Invoice\Resource\Invoice;
+use Nails\Invoice\Resource\Payment;
 use stdClass;
 use Stripe\Account;
 use Stripe\BalanceTransaction;
@@ -73,11 +76,11 @@ class Stripe extends PaymentBase
     /**
      * Returns whether the driver is available to be used against the selected invoice
      *
-     * @param stdClass $oInvoice The invoice being charged
+     * @param Invoice $oInvoice The invoice being charged
      *
      * @return bool
      */
-    public function isAvailable($oInvoice): bool
+    public function isAvailable(Invoice $oInvoice): bool
     {
         return true;
     }
@@ -177,12 +180,12 @@ class Stripe extends PaymentBase
      * Initiate a payment
      *
      * @param int                  $iAmount      The payment amount
-     * @param string               $sCurrency    The payment currency
+     * @param Currency             $oCurrency    The payment currency
      * @param stdClass             $oData        An array of driver data
      * @param stdClass             $oCustomData  The custom data object
      * @param string               $sDescription The charge description
-     * @param Resource\Payment     $oPayment     The payment object
-     * @param Resource\Invoice     $oInvoice     The invoice object
+     * @param Payment              $oPayment     The payment object
+     * @param Invoice              $oInvoice     The invoice object
      * @param string               $sSuccessUrl  The URL to go to after successful payment
      * @param string               $sErrorUrl    The URL to go to after failed payment
      * @param Resource\Source|null $oSource      The saved payment source to use
@@ -191,15 +194,15 @@ class Stripe extends PaymentBase
      */
     public function charge(
         int $iAmount,
-        string $sCurrency,
+        Currency $oCurrency,
         stdClass $oData,
         stdClass $oCustomData,
         string $sDescription,
-        Resource\Payment $oPayment,
-        Resource\Invoice $oInvoice,
+        Payment $oPayment,
+        Invoice $oInvoice,
         string $sSuccessUrl,
         string $sErrorUrl,
-        Resource\Source $oSource = null
+        \Nails\Invoice\Resource\Source $oSource = null
     ): ChargeResponse {
 
         /** @var ChargeResponse $oChargeResponse */
@@ -213,11 +216,12 @@ class Stripe extends PaymentBase
             //  Generate the request data
             $aRequestData = $this->getRequestData(
                 $iAmount,
-                $sCurrency,
+                $oCurrency,
                 $oData,
                 $oCustomData,
                 $sDescription,
-                $oInvoice
+                $oInvoice,
+                $oSource
             );
 
             //  Create the intent
@@ -305,11 +309,11 @@ class Stripe extends PaymentBase
      * Returns an arrya of request data for a PaymentIntent request
      *
      * @param int      $iAmount      The payment amount
-     * @param string   $sCurrency    The payment currency
+     * @param Currency $oCurrency    The payment currency
      * @param stdClass $oData        The driver data object
      * @param stdClass $oCustomData  The custom data object
      * @param string   $sDescription The charge description
-     * @param stdClass $oInvoice     The invoice object
+     * @param Invoice  $oInvoice     The invoice object
      *
      * @return array
      * @throws DriverException
@@ -317,12 +321,13 @@ class Stripe extends PaymentBase
      * @throws ModelException
      */
     protected function getRequestData(
-        $iAmount,
-        $sCurrency,
-        $oData,
-        $oCustomData,
-        $sDescription,
-        $oInvoice
+        int $iAmount,
+        Currency $oCurrency,
+        stdClass $oData,
+        stdClass $oCustomData,
+        string $sDescription,
+        Invoice $oInvoice,
+        \Nails\Invoice\Resource\Source $oSource = null
     ): array {
 
         //  Get any meta data to pass along to Stripe
@@ -334,7 +339,7 @@ class Stripe extends PaymentBase
 
         $aRequestData = [
             'amount'               => $iAmount,
-            'currency'             => $sCurrency,
+            'currency'             => $oCurrency->code,
             'confirmation_method'  => 'manual',
             'confirm'              => true,
             'description'          => $sDescription,
@@ -350,18 +355,11 @@ class Stripe extends PaymentBase
             }
         }
 
-        if (property_exists($oCustomData, 'source_id')) {
+        if (null !== $oSource) {
 
             /**
              * The customer is checking out using a saved payment source
              */
-            /** @var Source $oSourceModel */
-            $oSourceModel = Factory::model('Source', Constants::MODULE_SLUG);
-            $oSource      = $oSourceModel->getById($oCustomData->source_id);
-            if (empty($oSource)) {
-                throw new DriverException('Invalid source ID supplied.');
-            }
-
             $aSourceData = json_decode($oSource->data, JSON_OBJECT_AS_ARRAY) ?? [];
             $sSourceId   = getFromArray('source_id', $aSourceData);
             $sCustomerId = getFromArray('customer_id', $aSourceData);
@@ -414,8 +412,9 @@ class Stripe extends PaymentBase
      * @return ScaResponse
      * @throws DriverException
      */
-    public function sca(ScaResponse $oScaResponse, array $aData, string $sSuccessUrl): ScaResponse
-    {
+    public function sca(
+        ScaResponse $oScaResponse, array $aData, string $sSuccessUrl
+    ): ScaResponse {
         $iPaymentIntentId = getFromArray('id', $aData);
         if (empty($iPaymentIntentId)) {
             throw new DriverException('Missing Payment Intent ID');
@@ -520,8 +519,9 @@ class Stripe extends PaymentBase
      * @return ScaResponse
      * @throws DriverException
      */
-    protected function scaComplete(ScaResponse $oScaResponse, PaymentIntent $oPaymentIntent): ScaResponse
-    {
+    protected function scaComplete(
+        ScaResponse $oScaResponse, PaymentIntent $oPaymentIntent
+    ): ScaResponse {
         $oCharge = reset($oPaymentIntent->charges->data);
         if (empty($oCharge)) {
             throw new DriverException('No charges detected. Payment was not processed.');
@@ -550,8 +550,9 @@ class Stripe extends PaymentBase
      *
      * @return CompleteResponse
      */
-    public function complete($oPayment, $oInvoice, $aGetVars, $aPostVars): CompleteResponse
-    {
+    public function complete(
+        $oPayment, $oInvoice, $aGetVars, $aPostVars
+    ): CompleteResponse {
         /** @var CompleteResponse $oCompleteResponse */
         $oCompleteResponse = Factory::factory('CompleteResponse', Constants::MODULE_SLUG);
         $oCompleteResponse->setStatusComplete();
@@ -573,8 +574,9 @@ class Stripe extends PaymentBase
      *
      * @return RefundResponse
      */
-    public function refund($sTxnId, $iAmount, $sCurrency, $oCustomData, $sReason, $oPayment, $oInvoice): RefundResponse
-    {
+    public function refund(
+        $sTxnId, $iAmount, $sCurrency, $oCustomData, $sReason, $oPayment, $oInvoice
+    ): RefundResponse {
         /** @var RefundResponse $oRefundResponse */
         $oRefundResponse = Factory::factory('RefundResponse', Constants::MODULE_SLUG);
 
@@ -655,8 +657,9 @@ class Stripe extends PaymentBase
      *
      * @return string
      */
-    protected function getApiKey(string $sType = 'secret'): string
-    {
+    protected function getApiKey(
+        string $sType = 'secret'
+    ): string {
         if (Environment::is(Environment::ENV_PROD)) {
             $sApiKey = $this->getSetting('sKeyLive' . ucfirst(strtolower($sType)));
         } else {
@@ -675,13 +678,14 @@ class Stripe extends PaymentBase
     /**
      * Extract the meta data from the invoice and custom data objects
      *
-     * @param stdClass $oInvoice    The invoice object
+     * @param Invoice  $oInvoice    The invoice object
      * @param stdClass $oCustomData The custom data object
      *
      * @return array
      */
-    protected function extractMetaData($oInvoice, $oCustomData): array
-    {
+    protected function extractMetaData(
+        Invoice $oInvoice, stdClass $oCustomData
+    ): array {
         //  Store any custom meta data; Stripe allows up to 20 key value pairs with key
         //  names up to 40 characters and values up to 500 characters.
 
