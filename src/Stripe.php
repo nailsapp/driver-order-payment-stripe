@@ -752,8 +752,17 @@ class Stripe extends PaymentBase
             $oStripeCustomer = \Stripe\Customer::retrieve($sCustomerId);
         }
 
+        if (empty($oStripeCustomer)) {
+            throw new DriverException('Failed to retrive Stripe customer object.');
+        }
+
         $oStripeSource = $oStripeCustomer->sources->create(['source' => $sSourceId]);
-        $oExpiry       = new \DateTime(implode('-', [
+
+        if (empty($oStripeSource)) {
+            throw new DriverException('Failed to create Stripe payment source.');
+        }
+
+        $oExpiry = new \DateTime(implode('-', [
             $oStripeSource->card->exp_year,
             $oStripeSource->card->exp_month,
             '01',
