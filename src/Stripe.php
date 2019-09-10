@@ -24,7 +24,6 @@ use Nails\Invoice\Factory\ChargeResponse;
 use Nails\Invoice\Factory\CompleteResponse;
 use Nails\Invoice\Factory\RefundResponse;
 use Nails\Invoice\Factory\ScaResponse;
-use Nails\Invoice\Model\Source;
 use Nails\Invoice\Resource;
 use stdClass;
 use Stripe\Account;
@@ -180,7 +179,7 @@ class Stripe extends PaymentBase
      * @param int                  $iAmount      The payment amount
      * @param Currency             $oCurrency    The payment currency
      * @param stdClass             $oData        An array of driver data
-     * @param stdClass             $oCustomData  The custom data object
+     * @param stdClass             $oPaymentData The payment data object
      * @param string               $sDescription The charge description
      * @param Resource\Payment     $oPayment     The payment object
      * @param Resource\Invoice     $oInvoice     The invoice object
@@ -194,7 +193,7 @@ class Stripe extends PaymentBase
         int $iAmount,
         Currency $oCurrency,
         stdClass $oData,
-        stdClass $oCustomData,
+        stdClass $oPaymentData,
         string $sDescription,
         Resource\Payment $oPayment,
         Resource\Invoice $oInvoice,
@@ -216,7 +215,7 @@ class Stripe extends PaymentBase
                 $iAmount,
                 $oCurrency,
                 $oData,
-                $oCustomData,
+                $oPaymentData,
                 $sDescription,
                 $oInvoice,
                 $oSource
@@ -246,9 +245,10 @@ class Stripe extends PaymentBase
             $oCharge             = reset($oPaymentIntent->charges->data);
             $oBalanceTransaction = BalanceTransaction::retrieve($oCharge->balance_transaction);
 
-            $oChargeResponse->setStatusComplete();
-            $oChargeResponse->setTxnId($oCharge->id);
-            $oChargeResponse->setFee($oBalanceTransaction->fee);
+            $oChargeResponse
+                ->setStatusComplete()
+                ->setTransactionId($oCharge->id)
+                ->setFee($oBalanceTransaction->fee);
 
         } catch (ApiConnection $e) {
 
@@ -309,7 +309,7 @@ class Stripe extends PaymentBase
      * @param int              $iAmount      The payment amount
      * @param Currency         $oCurrency    The payment currency
      * @param stdClass         $oData        The driver data object
-     * @param stdClass         $oCustomData  The custom data object
+     * @param stdClass         $oPaymentData The payment data object
      * @param string           $sDescription The charge description
      * @param Resource\Invoice $oInvoice     The invoice object
      *
@@ -322,14 +322,14 @@ class Stripe extends PaymentBase
         int $iAmount,
         Currency $oCurrency,
         stdClass $oData,
-        stdClass $oCustomData,
+        stdClass $oPaymentData,
         string $sDescription,
         Resource\Invoice $oInvoice,
         Resource\Source $oSource = null
     ): array {
 
         //  Get any meta data to pass along to Stripe
-        $aMetaData = $this->extractMetaData($oInvoice, $oCustomData);
+        $aMetaData = $this->extractMetaData($oInvoice, $oPaymentData);
 
         //  Prep the statement descriptor
         $sStatementDescriptor = $this->getSetting('sStatementDescriptor');
@@ -371,7 +371,7 @@ class Stripe extends PaymentBase
             $aRequestData['payment_method'] = $sSourceId;
             $aRequestData['customer']       = $sCustomerId;
 
-        } elseif (property_exists($oCustomData, 'token')) {
+        } elseif (property_exists($oPaymentData, 'token')) {
 
             /**
              * The customer is checking out using a Stripe token
@@ -379,17 +379,17 @@ class Stripe extends PaymentBase
             $aRequestData['payment_method_data'] = [
                 'type' => 'card',
                 'card' => [
-                    'token' => $oCustomData->token,
+                    'token' => $oPaymentData->token,
                 ],
             ];
 
-        } elseif (property_exists($oCustomData, 'stripe_source_id') && property_exists($oCustomData, 'stripe_customer_id')) {
+        } elseif (property_exists($oPaymentData, 'stripe_source_id') && property_exists($oPaymentData, 'stripe_customer_id')) {
 
             /**
              * Dev has passed explicit stripe source and customer IDs
              */
-            $aRequestData['payment_method'] = $oCustomData->stripe_source_id;
-            $aRequestData['customer']       = $oCustomData->stripe_customer_id;
+            $aRequestData['payment_method'] = $oPaymentData->stripe_source_id;
+            $aRequestData['customer']       = $oPaymentData->stripe_customer_id;
 
         } else {
             throw new DriverException('Must provide `token` or `source_id`.');
@@ -530,7 +530,7 @@ class Stripe extends PaymentBase
 
         $oScaResponse
             ->setIsComplete(true)
-            ->setTxnId($oCharge->id)
+            ->setTransactionId($oCharge->id)
             ->setFee($oBalanceTransaction->fee);
 
         return $oScaResponse;
@@ -565,21 +565,21 @@ class Stripe extends PaymentBase
     /**
      * Issue a refund for a payment
      *
-     * @param string           $sTxnId      The original transaction's ID
-     * @param int              $iAmount     The amount to refund
-     * @param Currency         $oCurrency   The currency in which to refund
-     * @param stdClass         $oCustomData The custom data object
-     * @param string           $sReason     The refund's reason
-     * @param Resource\Payment $oPayment    The payment object
-     * @param Resource\Invoice $oInvoice    The invoice object
+     * @param string           $sTransactionId The original transaction's ID
+     * @param int              $iAmount        The amount to refund
+     * @param Currency         $oCurrency      The currency in which to refund
+     * @param stdClass         $oPaymentData   The payment data object
+     * @param string           $sReason        The refund's reason
+     * @param Resource\Payment $oPayment       The payment object
+     * @param Resource\Invoice $oInvoice       The invoice object
      *
      * @return RefundResponse
      */
     public function refund(
-        string $sTxnId,
+        string $sTransactionId,
         int $iAmount,
         Currency $oCurrency,
-        stdClass $oCustomData,
+        stdClass $oPaymentData,
         string $sReason,
         Resource\Payment $oPayment,
         Resource\Invoice $oInvoice
@@ -593,10 +593,10 @@ class Stripe extends PaymentBase
             $this->setApiKey();
 
             //  Get any meta data to pass along to Stripe
-            $aMetaData       = $this->extractMetaData($oInvoice, $oCustomData);
+            $aMetaData       = $this->extractMetaData($oInvoice, $oPaymentData);
             $oStripeResponse = Refund::create(
                 [
-                    'charge'   => $sTxnId,
+                    'charge'   => $sTransactionId,
                     'amount'   => $iAmount,
                     'metadata' => $aMetaData,
                     'expand'   => [
@@ -606,7 +606,7 @@ class Stripe extends PaymentBase
             );
 
             $oRefundResponse->setStatusComplete();
-            $oRefundResponse->setTxnId($oStripeResponse->id);
+            $oRefundResponse->setTransactionId($oStripeResponse->id);
             $oRefundResponse->setFee($oStripeResponse->balance_transaction->fee * -1);
 
         } catch (ApiConnection $e) {
@@ -683,27 +683,31 @@ class Stripe extends PaymentBase
     // --------------------------------------------------------------------------
 
     /**
-     * Extract the meta data from the invoice and custom data objects
+     * Extract the meta data from the invoice and payment data objects
      *
-     * @param Resource\Invoice $oInvoice    The invoice object
-     * @param stdClass         $oCustomData The custom data object
+     * @param Resource\Invoice $oInvoice     The invoice object
+     * @param stdClass         $oPaymentData The payment data object
      *
      * @return array
      */
     protected function extractMetaData(
-        Resource\Invoice $oInvoice, stdClass $oCustomData
+        Resource\Invoice $oInvoice,
+        stdClass $oPaymentData
     ): array {
-        //  Store any custom meta data; Stripe allows up to 20 key value pairs with key
-        //  names up to 40 characters and values up to 500 characters.
 
-        //  In practice only 18 custom key can be defined
+        /**
+         * Store any custom meta data; Stripe allows up to 20 key value pairs with key
+         * names up to 40 characters and values up to 500 characters.
+         * In practice only 18 custom key can be defined
+         */
+
         $aMetaData = [
             'invoiceId'  => $oInvoice->id,
             'invoiceRef' => $oInvoice->ref,
         ];
 
-        if (!empty($oCustomData->metadata)) {
-            $aMetaData = array_merge($aMetaData, (array) $oCustomData->metadata);
+        if (!empty($oPaymentData->metadata)) {
+            $aMetaData = array_merge($aMetaData, (array) $oPaymentData->metadata);
         }
 
         $aCleanMetaData = [];
