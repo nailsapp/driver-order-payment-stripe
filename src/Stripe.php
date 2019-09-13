@@ -343,6 +343,7 @@ class Stripe extends PaymentBase
             'confirm'              => true,
             'description'          => $sDescription,
             'metadata'             => $aMetaData,
+            'off_session'          => empty($bCustomerPresent),
             'statement_descriptor' => substr($sStatementDescriptor, 0, 22),
         ];
 
