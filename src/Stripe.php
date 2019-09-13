@@ -12,8 +12,6 @@
 
 namespace Nails\Invoice\Driver\Payment;
 
-use Nails\Common\Exception\FactoryException;
-use Nails\Common\Exception\ModelException;
 use Nails\Currency\Resource\Currency;
 use Nails\Environment;
 use Nails\Factory;
@@ -199,6 +197,7 @@ class Stripe extends PaymentBase
         Resource\Invoice $oInvoice,
         string $sSuccessUrl,
         string $sErrorUrl,
+        bool $bCustomerPresent,
         Resource\Source $oSource = null
     ): ChargeResponse {
 
@@ -218,6 +217,7 @@ class Stripe extends PaymentBase
                 $oPaymentData,
                 $sDescription,
                 $oInvoice,
+                $bCustomerPresent,
                 $oSource
             );
 
@@ -306,17 +306,17 @@ class Stripe extends PaymentBase
     /**
      * Returns an arrya of request data for a PaymentIntent request
      *
-     * @param int                           $iAmount      The payment amount
-     * @param Currency                      $oCurrency    The payment currency
-     * @param stdClass                      $oData        The driver data object
-     * @param Resource\Invoice\Data\Payment $oPaymentData The payment data object
-     * @param string                        $sDescription The charge description
-     * @param Resource\Invoice              $oInvoice     The invoice object
+     * @param int                           $iAmount          The payment amount
+     * @param Currency                      $oCurrency        The payment currency
+     * @param stdClass                      $oData            The driver data object
+     * @param Resource\Invoice\Data\Payment $oPaymentData     The payment data object
+     * @param string                        $sDescription     The charge description
+     * @param Resource\Invoice              $oInvoice         The invoice object
+     * @param bool                          $bCustomerPresent Whether the customer is present
+     * @param Resource\Source|null          $oSource          The supplied payment source to charge
      *
      * @return array
      * @throws DriverException
-     * @throws FactoryException
-     * @throws ModelException
      */
     protected function getRequestData(
         int $iAmount,
@@ -325,6 +325,7 @@ class Stripe extends PaymentBase
         Resource\Invoice\Data\Payment $oPaymentData,
         string $sDescription,
         Resource\Invoice $oInvoice,
+        bool $bCustomerPresent,
         Resource\Source $oSource = null
     ): array {
 
