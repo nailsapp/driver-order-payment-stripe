@@ -27,14 +27,14 @@
     "prefer-stable": true,
     "require": {
         "nails/module-invoice": "dev-develop",
-        "stripe/stripe-php": "3.*"
+        "stripe/stripe-php": "6.*"
     },
     "require-dev": {
-        "phpunit/phpunit": "7.*"
+        "phpunit/phpunit": "8.*"
     },
     "autoload": {
         "psr-4": {
-            "Nails\\Invoice\\Driver\\": "src/"
+            "Nails\\Invoice\\Driver\\Payment\\Stripe\\": "src/"
         }
     },
     "extra": {
@@ -54,14 +54,6 @@
                         "default": "Stripe"
                     },
                     {
-                        "key": "iLogoId",
-                        "label": "Logo",
-                        "info": "The logo of the provider, as seen by customers",
-                        "default": null,
-                        "type": "image",
-                        "bucket": "nails-driver-invoice-stripe"
-                    },
-                    {
                         "key": "sStatementDescriptor",
                         "label": "Statement Descriptor",
                         "info": "The text shown on the customer's statement. You can sub in {{INVOICE_REF}} for the invoice reference.",
@@ -76,34 +68,34 @@
                         "default": false
                     },
                     {
-                        "legend": "Test API Keys",
+                        "legend": "API Keys - Test",
                         "fields": [
                             {
-                                "key": "sKeyTestSecret",
-                                "label": "Secret Key",
+                                "key": "sKeyTestPublic",
+                                "label": "Publishable Key",
                                 "type": "password",
                                 "encrypted": true
                             },
                             {
-                                "key": "sKeyTestPublic",
-                                "label": "Public Key",
+                                "key": "sKeyTestSecret",
+                                "label": "Secret Key",
                                 "type": "password",
                                 "encrypted": true
                             }
                         ]
                     },
                     {
-                        "legend": "Live API Keys",
+                        "legend": "API Keys - Live",
                         "fields": [
                             {
-                                "key": "sKeyLiveSecret",
-                                "label": "Secret Key",
+                                "key": "sKeyLivePublic",
+                                "label": "Publishable Key",
                                 "type": "password",
                                 "encrypted": true
                             },
                             {
-                                "key": "sKeyLivePublic",
-                                "label": "Public Key",
+                                "key": "sKeyLiveSecret",
+                                "label": "Secret Key",
                                 "type": "password",
                                 "encrypted": true
                             }
