@@ -844,7 +844,7 @@ class Stripe extends PaymentBase
      *
      * @param mixed $mCustomerId The gateway's customer ID
      */
-    public function deleteCustomer($mCustomerId)
+    public function deleteCustomer($mCustomerId): void
     {
         $this->setApiKey();
         $oCustomer = $this->getCustomer($mCustomerId);
