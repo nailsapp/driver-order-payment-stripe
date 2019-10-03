@@ -753,9 +753,9 @@ class Stripe extends PaymentBase
         $this->setApiKey();
 
         if (empty($sCustomerId)) {
-            $oStripeCustomer = \Stripe\Customer::create();
+            $oStripeCustomer = $this->createCustomer();
         } else {
-            $oStripeCustomer = \Stripe\Customer::retrieve($sCustomerId);
+            $oStripeCustomer = $this->getCustomer($sCustomerId);
         }
 
         if (empty($oStripeCustomer)) {
@@ -782,14 +782,72 @@ class Stripe extends PaymentBase
             'customer_id' => $oStripeCustomer->id,
         ]);
     }
-    
-    public function createCustomer(
-        array $customer
-    ) {
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Convinience method for creating a new customer on the gateway
+     *
+     * @param array $aData The driver specific customer data
+     *
+     * @return \Stripe\Customer
+     */
+    public function createCustomer(array $aData = []): \Stripe\Customer
+    {
         $this->setApiKey();
+        return \Stripe\Customer::create($aData);
+    }
 
-        $oStripeCustomer = \Stripe\Customer::create($customer);
+    // --------------------------------------------------------------------------
 
-        return array_combine($oStripeCustomer->keys(), $oStripeCustomer->values());
+    /**
+     * Convinience method for retrieving an existing customer from the gateway
+     *
+     * @param mixed $mCustomerId The gateway's customer ID
+     * @param array $aData       Any driver specific data
+     *
+     * @return \Stripe\Customer
+     */
+    public function getCustomer($mCustomerId, array $aData = []): \Stripe\Customer
+    {
+        $this->setApiKey();
+        $oCustomer = \Stripe\Customer::retrieve($mCustomerId, $aData);
+
+        //  Perform similar behaviour as if customer ID doesn't exist
+        if ($oCustomer->isDeleted()) {
+            throw new DriverException('Customer "' . $mCustomerId . '" is deleted.');
+        }
+
+        return $oCustomer;
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Convinience method for updating an existing customer on the gateway
+     *
+     * @param mixed $mCustomerId The gateway's customer ID
+     * @param array $aData       The driver specific customer data
+     *
+     * @return \Stripe\Customer
+     */
+    public function updateCustomer($mCustomerId, array $aData = []): \Stripe\Customer
+    {
+        $this->setApiKey();
+        return \Stripe\Customer::update($mCustomerId, $aData);
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Convinience method for deleting an existing customer on the gateway
+     *
+     * @param mixed $mCustomerId The gateway's customer ID
+     */
+    public function deleteCustomer($mCustomerId)
+    {
+        $this->setApiKey();
+        $oCustomer = $this->getCustomer($mCustomerId);
+        $oCustomer->delete();
     }
 }
