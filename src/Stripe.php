@@ -782,4 +782,14 @@ class Stripe extends PaymentBase
             'customer_id' => $oStripeCustomer->id,
         ]);
     }
+    
+    public function createCustomer(
+        array $customer
+    ) {
+        $this->setApiKey();
+
+        $oStripeCustomer = \Stripe\Customer::create($customer);
+
+        return array_combine($oStripeCustomer->keys(), $oStripeCustomer->values());
+    }
 }
