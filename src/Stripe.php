@@ -769,13 +769,13 @@ class Stripe extends PaymentBase
         }
 
         $oExpiry = new \DateTime(implode('-', [
-            $oStripeSource->card->exp_year,
-            $oStripeSource->card->exp_month,
+            $oStripeSource->exp_year,
+            $oStripeSource->exp_month,
             '01',
         ]));
 
-        $oResource->brand     = $oStripeSource->card->brand;
-        $oResource->last_four = $oStripeSource->card->last4;
+        $oResource->brand     = $oStripeSource->brand;
+        $oResource->last_four = $oStripeSource->last4;
         $oResource->expiry    = $oExpiry->format('Y-m-t H:i:s');
         $oResource->data      = json_encode([
             'source_id'   => $oStripeSource->id,
