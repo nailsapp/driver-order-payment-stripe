@@ -365,9 +365,9 @@ class Stripe extends PaymentBase
             $sCustomerId = getFromArray('customer_id', $aSourceData);
 
             if (empty($sSourceId)) {
-                throw new DriverException('Could not acertain the "source_id" from the Source object.');
+                throw new DriverException('Could not ascertain the "source_id" from the Source object.');
             } elseif (empty($sCustomerId)) {
-                throw new DriverException('Could not acertain the "customer_id" from the Source object.');
+                throw new DriverException('Could not ascertain the "customer_id" from the Source object.');
             }
 
             $aRequestData['payment_method'] = $sSourceId;
