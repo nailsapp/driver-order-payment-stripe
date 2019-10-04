@@ -394,7 +394,9 @@ class Stripe extends PaymentBase
             $aRequestData['customer']       = $oPaymentData->stripe_customer_id;
 
         } else {
-            throw new DriverException('Must provide `token` or `source_id`.');
+            throw new DriverException(
+                'Must provide a payment source, `token` or `stripe_source_id` and `stripe_customer_id`.'
+            );
         }
 
         return $aRequestData;
