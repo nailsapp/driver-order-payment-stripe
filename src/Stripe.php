@@ -360,9 +360,8 @@ class Stripe extends PaymentBase
             /**
              * The customer is checking out using a saved payment source
              */
-            $aSourceData = json_decode($oSource->data, JSON_OBJECT_AS_ARRAY) ?? [];
-            $sSourceId   = getFromArray('source_id', $aSourceData);
-            $sCustomerId = getFromArray('customer_id', $aSourceData);
+            $sSourceId   = getFromArray('source_id', (array) $oSource->data);
+            $sCustomerId = getFromArray('customer_id', (array) $oSource->data);
 
             if (empty($sSourceId)) {
                 throw new DriverException('Could not ascertain the "source_id" from the Source object.');
@@ -779,10 +778,10 @@ class Stripe extends PaymentBase
         $oResource->brand     = $oStripeSource->brand;
         $oResource->last_four = $oStripeSource->last4;
         $oResource->expiry    = $oExpiry->format('Y-m-t');
-        $oResource->data      = json_encode([
+        $oResource->data      = (object) [
             'source_id'   => $oStripeSource->id,
             'customer_id' => $oStripeCustomer->id,
-        ]);
+        ];
     }
 
     // --------------------------------------------------------------------------
