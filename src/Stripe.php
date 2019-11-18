@@ -810,8 +810,11 @@ class Stripe extends PaymentBase
     public function deleteSource(
         Resource\Source $oResource
     ): void {
-        //  @todo (Pablo - 2019-10-09) - implement this
-        throw new NailsException('Method not implemented');
+        $this->setApiKey();
+        Customer::deleteSource(
+            $oResource->data->customer_id,
+            $oResource->data->source_id
+        );
     }
 
     // --------------------------------------------------------------------------
