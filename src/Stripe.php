@@ -776,8 +776,8 @@ class Stripe extends PaymentBase
             '01',
         ]));
 
-        $oResource->brand     = $oStripeSource->brand;
-        $oResource->last_four = $oStripeSource->last4;
+        $oResource->brand     = $oStripeSource->card->brand;
+        $oResource->last_four = $oStripeSource->card->last4;
         $oResource->expiry    = $oExpiry->format('Y-m-t');
         $oResource->data      = (object) [
             'source_id'   => $oStripeSource->id,
