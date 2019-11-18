@@ -12,6 +12,7 @@
 
 namespace Nails\Invoice\Driver\Payment;
 
+use Nails\Common\Exception\NailsException;
 use Nails\Currency\Resource\Currency;
 use Nails\Environment;
 use Nails\Factory;
