@@ -27,6 +27,7 @@ use stdClass;
 use Stripe\Account;
 use Stripe\BalanceTransaction;
 use Stripe\CountrySpec;
+use Stripe\Customer;
 use Stripe\Error\Api;
 use Stripe\Error\ApiConnection;
 use Stripe\Error\Card;
@@ -763,15 +764,15 @@ class Stripe extends PaymentBase
             throw new DriverException('Failed to retrive Stripe customer object.');
         }
 
-        $oStripeSource = $oStripeCustomer->sources->create(['source' => $sSourceId]);
+        $oStripeSource = Customer::createSource($oStripeCustomer->id, ['source' => $sSourceId]);
 
         if (empty($oStripeSource)) {
             throw new DriverException('Failed to create Stripe payment source.');
         }
 
         $oExpiry = new \DateTime(implode('-', [
-            $oStripeSource->exp_year,
-            $oStripeSource->exp_month,
+            $oStripeSource->card->exp_year,
+            $oStripeSource->card->exp_month,
             '01',
         ]));
 
