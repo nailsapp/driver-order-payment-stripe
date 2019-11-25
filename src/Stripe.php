@@ -771,16 +771,43 @@ class Stripe extends PaymentBase
             throw new DriverException('Failed to create Stripe payment source.');
         }
 
-        $oExpiry = new \DateTime(implode('-', [
-            $oStripeSource->card->exp_year,
-            $oStripeSource->card->exp_month,
-            '01',
-        ]));
+        if ($oStripeSource instanceof \Stripe\Card) {
 
-        $oResource->brand     = $oStripeSource->card->brand;
-        $oResource->last_four = $oStripeSource->card->last4;
-        $oResource->expiry    = $oExpiry->format('Y-m-t');
-        $oResource->data      = (object) [
+            $oExpiry = new \DateTime(implode('-', [
+                $oStripeSource->exp_year,
+                $oStripeSource->exp_month,
+                '01',
+            ]));
+
+            $oResource->brand     = $oStripeSource->brand;
+            $oResource->last_four = $oStripeSource->last4;
+
+        } elseif ($oStripeSource instanceof \Stripe\Source) {
+
+            if (empty($oStripeSource->card)) {
+                throw new DriverException(
+                    'Failed to save Stripe Source. Encountered \\Stripe\\Source, but missing card property.'
+                );
+            }
+
+            $oExpiry = new \DateTime(implode('-', [
+                $oStripeSource->card->exp_year,
+                $oStripeSource->card->exp_month,
+                '01',
+            ]));
+
+            $oResource->brand     = $oStripeSource->card->brand;
+            $oResource->last_four = $oStripeSource->card->last4;
+
+        } else {
+            throw new DriverException(
+                'Failed to save Stripe Source. Unsupported response from Stripe, expected ' .
+                '\\Stripe\\Card or \\Stripe\\Source, got ' . get_class($oStripeSource)
+            );
+        }
+
+        $oResource->expiry = $oExpiry->format('Y-m-t');
+        $oResource->data   = (object) [
             'source_id'   => $oStripeSource->id,
             'customer_id' => $oStripeCustomer->id,
         ];
