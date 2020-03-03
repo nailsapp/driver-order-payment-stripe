@@ -672,6 +672,7 @@ class Stripe extends PaymentBase
     protected function getApiKey(
         string $sType = 'secret'
     ): string {
+
         if (Environment::is(Environment::ENV_PROD)) {
             $sApiKey = $this->getSetting('sKeyLive' . ucfirst(strtolower($sType)));
         } else {
