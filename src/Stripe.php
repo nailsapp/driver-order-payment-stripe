@@ -883,7 +883,7 @@ class Stripe extends PaymentBase
     public function getCustomer($mCustomerId, array $aData = []): \Stripe\Customer
     {
         $this->setApiKey();
-        $oCustomer = \Stripe\Customer::retrieve($mCusttomerId, $aData);
+        $oCustomer = \Stripe\Customer::retrieve($mCustomerId, $aData);
 
         //  Perform similar behaviour as if customer ID doesn't exist
         if ($oCustomer->isDeleted()) {
