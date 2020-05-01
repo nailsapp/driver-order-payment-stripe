@@ -824,9 +824,19 @@ class Stripe extends PaymentBase
     public function updateSource(
         Resource\Source $oResource
     ): void {
-        //  @todo (Pablo - 2019-10-09) - implement this
-        throw new NailsException('Method not implemented');
+        $this->setApiKey();
+        $oExpiry = new \DateTime($oResource->expiry);
+        Customer::updateSource(
+            $oResource->data->customer_id,
+            $oResource->data->source_id,
+            array_filter([
+                'name'      => $oResource->name,
+                'exp_month' => $oExpiry->format('m'),
+                'exp_year'  => $oExpiry->format('Y'),
+            ])
+        );
     }
+
 
     // --------------------------------------------------------------------------
 
@@ -873,7 +883,7 @@ class Stripe extends PaymentBase
     public function getCustomer($mCustomerId, array $aData = []): \Stripe\Customer
     {
         $this->setApiKey();
-        $oCustomer = \Stripe\Customer::retrieve($mCustomerId, $aData);
+        $oCustomer = \Stripe\Customer::retrieve($mCusttomerId, $aData);
 
         //  Perform similar behaviour as if customer ID doesn't exist
         if ($oCustomer->isDeleted()) {
