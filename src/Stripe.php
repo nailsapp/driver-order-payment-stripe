@@ -12,13 +12,15 @@
 
 namespace Nails\Invoice\Driver\Payment;
 
-use Nails\Common\Exception\NailsException;
+use Exception;
+use Nails\Common\Exception\FactoryException;
 use Nails\Currency\Resource\Currency;
 use Nails\Environment;
 use Nails\Factory;
 use Nails\Invoice\Constants;
 use Nails\Invoice\Driver\PaymentBase;
 use Nails\Invoice\Exception\DriverException;
+use Nails\Invoice\Exception\ResponseException;
 use Nails\Invoice\Factory\ChargeResponse;
 use Nails\Invoice\Factory\CompleteResponse;
 use Nails\Invoice\Factory\RefundResponse;
@@ -33,6 +35,10 @@ use Stripe\Error\Api;
 use Stripe\Error\ApiConnection;
 use Stripe\Error\Card;
 use Stripe\Error\InvalidRequest;
+use Stripe\Exception\ApiConnectionException;
+use Stripe\Exception\ApiErrorException;
+use Stripe\Exception\CardException;
+use Stripe\Exception\InvalidRequestException;
 use Stripe\PaymentIntent;
 use Stripe\Refund;
 
@@ -55,7 +61,7 @@ class Stripe extends PaymentBase
     // --------------------------------------------------------------------------
 
     /**
-     * Whether the driver has attemped to fetch supported currencies
+     * Whether the driver has attempted to fetch supported currencies
      *
      * @var bool
      */
@@ -64,7 +70,7 @@ class Stripe extends PaymentBase
     /**
      * The supported currencies for this configuration
      *
-     * @var stirng[]|null
+     * @var string[]|null
      */
     private static $aSupportedCurrencies = null;
 
@@ -105,7 +111,7 @@ class Stripe extends PaymentBase
 
                 self::$aSupportedCurrencies = array_map('strtoupper', $oCountry->supported_payment_currencies);
 
-            } catch (\Exception $e) {
+            } catch (Exception $e) {
                 //  @todo (Pablo - 2019-08-01) - shout about this?
             }
         }
@@ -151,6 +157,7 @@ class Stripe extends PaymentBase
      * Returns any assets to load during checkout
      *
      * @return array
+     * @throws DriverException
      */
     public function getCheckoutAssets(): array
     {
@@ -176,18 +183,21 @@ class Stripe extends PaymentBase
     /**
      * Initiate a payment
      *
-     * @param int                           $iAmount      The payment amount
-     * @param Currency                      $oCurrency    The payment currency
-     * @param stdClass                      $oData        An array of driver data
-     * @param Resource\Invoice\Data\Payment $oPaymentData The payment data object
-     * @param string                        $sDescription The charge description
-     * @param Resource\Payment              $oPayment     The payment object
-     * @param Resource\Invoice              $oInvoice     The invoice object
-     * @param string                        $sSuccessUrl  The URL to go to after successful payment
-     * @param string                        $sErrorUrl    The URL to go to after failed payment
-     * @param Resource\Source|null          $oSource      The saved payment source to use
+     * @param int                           $iAmount          The payment amount
+     * @param Currency                      $oCurrency        The payment currency
+     * @param stdClass                      $oData            An array of driver data
+     * @param Resource\Invoice\Data\Payment $oPaymentData     The payment data object
+     * @param string                        $sDescription     The charge description
+     * @param Resource\Payment              $oPayment         The payment object
+     * @param Resource\Invoice              $oInvoice         The invoice object
+     * @param string                        $sSuccessUrl      The URL to go to after successful payment
+     * @param string                        $sErrorUrl        The URL to go to after failed payment
+     * @param bool                          $bCustomerPresent Whether the customer is present
+     * @param Resource\Source|null          $oSource          The saved payment source to use
      *
      * @return ChargeResponse
+     * @throws FactoryException
+     * @throws ResponseException
      */
     public function charge(
         int $iAmount,
@@ -226,7 +236,7 @@ class Stripe extends PaymentBase
             //  Create the intent
             $oPaymentIntent = PaymentIntent::create($aRequestData);
 
-            //  (Pablo - 2019-07-24) - Support for legacy Stirpe APIs
+            //  (Pablo - 2019-07-24) - Support for legacy Stripe APIs
             $bRequiresAction = in_array($oPaymentIntent->status, [
                 self::PAYMENT_INTENT_STATUS_REQUIRES_ACTION,
                 self::PAYMENT_INTENT_STATUS_REQUIRES_SOURCE_ACTION,
@@ -252,7 +262,7 @@ class Stripe extends PaymentBase
                 ->setTransactionId($oCharge->id)
                 ->setFee($oBalanceTransaction->fee);
 
-        } catch (ApiConnection $e) {
+        } catch (ApiConnectionException $e) {
 
             //  Network problem, perhaps try again.
             $oChargeResponse->setStatusFailed(
@@ -261,7 +271,7 @@ class Stripe extends PaymentBase
                 'There was a problem connecting to the gateway, you may wish to try again.'
             );
 
-        } catch (InvalidRequest $e) {
+        } catch (InvalidRequestException $e) {
 
             //  You screwed up in your programming. Shouldn't happen!
             $oChargeResponse->setStatusFailed(
@@ -270,7 +280,7 @@ class Stripe extends PaymentBase
                 'The gateway rejected the request, you may wish to try again.'
             );
 
-        } catch (Api $e) {
+        } catch (ApiErrorException $e) {
 
             //  Stripe's servers are down!
             $oChargeResponse->setStatusFailed(
@@ -279,7 +289,7 @@ class Stripe extends PaymentBase
                 'There was a problem connecting to the gateway, you may wish to try again.'
             );
 
-        } catch (Card $e) {
+        } catch (CardException $e) {
 
             //  Card was declined. Work out why.
             $aJsonBody = $e->getJsonBody();
@@ -291,7 +301,7 @@ class Stripe extends PaymentBase
                 'The payment card was declined. ' . $aError['message']
             );
 
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
 
             $oChargeResponse->setStatusFailed(
                 $e->getMessage(),
@@ -306,7 +316,7 @@ class Stripe extends PaymentBase
     // --------------------------------------------------------------------------
 
     /**
-     * Returns an arrya of request data for a PaymentIntent request
+     * Returns an array of request data for a PaymentIntent request
      *
      * @param int                           $iAmount          The payment amount
      * @param Currency                      $oCurrency        The payment currency
@@ -414,6 +424,8 @@ class Stripe extends PaymentBase
      *
      * @return ScaResponse
      * @throws DriverException
+     * @throws ApiErrorException
+     * @throws ResponseException
      */
     public function sca(
         ScaResponse $oScaResponse, array $aData, string $sSuccessUrl
@@ -476,7 +488,7 @@ class Stripe extends PaymentBase
                     ]);
                     $this->scaComplete($oScaResponse, $oPaymentIntent);
 
-                } catch (\Exception $e) {
+                } catch (Exception $e) {
                     $oScaResponse
                         ->setStatusFailed(
                             implode(' ', [
@@ -488,6 +500,7 @@ class Stripe extends PaymentBase
                             $e->getCode() ?? '',
                             'Failed to authorise the payment.'
                         );
+                } catch (ResponseException $e) {
                 }
                 break;
 
@@ -521,6 +534,7 @@ class Stripe extends PaymentBase
      *
      * @return ScaResponse
      * @throws DriverException
+     * @throws ApiErrorException
      */
     protected function scaComplete(
         ScaResponse $oScaResponse, PaymentIntent $oPaymentIntent
@@ -552,6 +566,8 @@ class Stripe extends PaymentBase
      * @param array            $aPostVars Any $_POST variables passed from the redirect flow
      *
      * @return CompleteResponse
+     * @throws ResponseException
+     * @throws FactoryException
      */
     public function complete(
         Resource\Payment $oPayment,
@@ -579,6 +595,7 @@ class Stripe extends PaymentBase
      * @param Resource\Invoice              $oInvoice       The invoice object
      *
      * @return RefundResponse
+     * @throws FactoryException
      */
     public function refund(
         string $sTransactionId,
@@ -614,7 +631,7 @@ class Stripe extends PaymentBase
             $oRefundResponse->setTransactionId($oStripeResponse->id);
             $oRefundResponse->setFee($oStripeResponse->balance_transaction->fee * -1);
 
-        } catch (ApiConnection $e) {
+        } catch (ApiConnectionException $e) {
 
             //  Network problem, perhaps try again.
             $oRefundResponse->setStatusFailed(
@@ -623,7 +640,7 @@ class Stripe extends PaymentBase
                 'There was a problem connecting to the gateway, you may wish to try again.'
             );
 
-        } catch (InvalidRequest $e) {
+        } catch (InvalidRequestException $e) {
 
             //  You screwed up in your programming. Shouldn't happen!
             $oRefundResponse->setStatusFailed(
@@ -632,7 +649,7 @@ class Stripe extends PaymentBase
                 'The gateway rejected the request, you may wish to try again.'
             );
 
-        } catch (Api $e) {
+        } catch (ApiErrorException $e) {
 
             //  Stripe's servers are down!
             $oRefundResponse->setStatusFailed(
@@ -641,7 +658,7 @@ class Stripe extends PaymentBase
                 'There was a problem connecting to the gateway, you may wish to try again.'
             );
 
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             $oRefundResponse->setStatusFailed(
                 $e->getMessage(),
                 $e->getCode(),
@@ -656,6 +673,8 @@ class Stripe extends PaymentBase
 
     /**
      * Set the appropriate API Key to use
+     *
+     * @throws DriverException
      */
     protected function setApiKey(): void
     {
@@ -667,7 +686,10 @@ class Stripe extends PaymentBase
     /**
      * Returns the correct API key for the environment
      *
+     * @param string $sType
+     *
      * @return string
+     * @throws DriverException
      */
     protected function getApiKey(
         string $sType = 'secret'
@@ -737,10 +759,11 @@ class Stripe extends PaymentBase
     /**
      * Creates a new payment source, returns a semi-populated source resource
      *
-     * @param Resource\Source $oResource The Resouce object to update
+     * @param Resource\Source $oResource The Resource object to update
      * @param array           $aData     Data passed from the caller
      *
      * @throws DriverException
+     * @throws ApiErrorException
      */
     public function createSource(
         Resource\Source &$oResource,
@@ -820,6 +843,10 @@ class Stripe extends PaymentBase
      * Updates a payment source on the gateway
      *
      * @param Resource\Source $oResource The Resource being updated
+     *
+     * @throws ApiErrorException
+     * @throws DriverException
+     * @throws Exception
      */
     public function updateSource(
         Resource\Source $oResource
@@ -844,6 +871,9 @@ class Stripe extends PaymentBase
      * Deletes a payment source from the gateway
      *
      * @param Resource\Source $oResource The Resource being deleted
+     *
+     * @throws DriverException
+     * @throws ApiErrorException
      */
     public function deleteSource(
         Resource\Source $oResource
@@ -858,11 +888,13 @@ class Stripe extends PaymentBase
     // --------------------------------------------------------------------------
 
     /**
-     * Convinience method for creating a new customer on the gateway
+     * Convenience method for creating a new customer on the gateway
      *
      * @param array $aData The driver specific customer data
      *
      * @return \Stripe\Customer
+     * @throws DriverException
+     * @throws ApiErrorException
      */
     public function createCustomer(array $aData = []): \Stripe\Customer
     {
@@ -873,12 +905,14 @@ class Stripe extends PaymentBase
     // --------------------------------------------------------------------------
 
     /**
-     * Convinience method for retrieving an existing customer from the gateway
+     * Convenience method for retrieving an existing customer from the gateway
      *
      * @param mixed $mCustomerId The gateway's customer ID
      * @param array $aData       Any driver specific data
      *
      * @return \Stripe\Customer
+     * @throws DriverException
+     * @throws ApiErrorException
      */
     public function getCustomer($mCustomerId, array $aData = []): \Stripe\Customer
     {
@@ -896,12 +930,14 @@ class Stripe extends PaymentBase
     // --------------------------------------------------------------------------
 
     /**
-     * Convinience method for updating an existing customer on the gateway
+     * Convenience method for updating an existing customer on the gateway
      *
      * @param mixed $mCustomerId The gateway's customer ID
      * @param array $aData       The driver specific customer data
      *
      * @return \Stripe\Customer
+     * @throws DriverException
+     * @throws ApiErrorException
      */
     public function updateCustomer($mCustomerId, array $aData = []): \Stripe\Customer
     {
@@ -912,9 +948,12 @@ class Stripe extends PaymentBase
     // --------------------------------------------------------------------------
 
     /**
-     * Convinience method for deleting an existing customer on the gateway
+     * Convenience method for deleting an existing customer on the gateway
      *
      * @param mixed $mCustomerId The gateway's customer ID
+     *
+     * @throws DriverException
+     * @throws ApiErrorException
      */
     public function deleteCustomer($mCustomerId): void
     {
