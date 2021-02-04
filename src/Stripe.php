@@ -810,7 +810,10 @@ class Stripe extends PaymentBase
 
             if (empty($oStripeSource->card)) {
                 throw new DriverException(
-                    'Failed to save Stripe Source. Encountered \\Stripe\\Source, but missing card property.'
+                    sprintf(
+                        'Failed to save Stripe Source. Encountered %s, but missing card property.',
+                        \Stripe\Source::class
+                    )
                 );
             }
 
@@ -825,8 +828,12 @@ class Stripe extends PaymentBase
 
         } else {
             throw new DriverException(
-                'Failed to save Stripe Source. Unsupported response from Stripe, expected ' .
-                '\\Stripe\\Card or \\Stripe\\Source, got ' . get_class($oStripeSource)
+                sprintf(
+                    'Failed to save Stripe Source. Unsupported response from Stripe, expected %s or %s got %s',
+                    \Stripe\Card::class,
+                    \Stripe\Source::class,
+                    get_class($oStripeSource)
+                )
             );
         }
 
