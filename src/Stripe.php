@@ -548,7 +548,7 @@ class Stripe extends PaymentBase
         $oBalanceTransaction = BalanceTransaction::retrieve($oCharge->balance_transaction);
 
         $oScaResponse
-            ->setIsComplete(true)
+            ->setStatusComplete()
             ->setTransactionId($oCharge->id)
             ->setFee($oBalanceTransaction->fee);
 
