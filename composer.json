@@ -34,6 +34,7 @@
         "phpstan/phpstan": "0.*"
     },
     "scripts": {
+        "test": "./vendor/bin/phpunit",
         "analyse": "./vendor/bin/phpstan analyse -c .phpstan/config.neon"
     },
     "autoload": {
