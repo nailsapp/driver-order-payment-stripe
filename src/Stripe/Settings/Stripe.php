@@ -78,7 +78,6 @@ class Stripe implements Interfaces\Component\Settings
         $oKeyPublicTest = Factory::factory('ComponentSetting');
         $oKeyPublicTest
             ->setKey(static::KEY_TEST_PUBLIC)
-            ->setType(Form::FIELD_PASSWORD)
             ->setLabel('Publishable Key')
             ->setEncrypted(true)
             ->setFieldset('API Keys - Test');
@@ -96,7 +95,6 @@ class Stripe implements Interfaces\Component\Settings
         $oKeyPublicLive = Factory::factory('ComponentSetting');
         $oKeyPublicLive
             ->setKey(static::KEY_LIVE_PUBLIC)
-            ->setType(Form::FIELD_PASSWORD)
             ->setLabel('Publishable Key')
             ->setEncrypted(true)
             ->setFieldset('API Keys - Live');
