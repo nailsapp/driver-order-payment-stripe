@@ -39,7 +39,8 @@
     },
     "autoload": {
         "psr-4": {
-            "Nails\\Invoice\\Driver\\Payment\\Stripe\\": "src/"
+            "Nails\\Invoice\\Driver\\Payment\\": "src/",
+            "Nails\\Invoice\\Driver\\Payment\\Stripe\\": "src/Stripe/"
         }
     },
     "extra": {
@@ -48,65 +49,10 @@
             "type": "driver",
             "subType": "payment",
             "forModule": "nails/module-invoice",
+            "namespace": "Nails\\Invoice\\Driver\\Payment\\Stripe\\",
             "data": {
                 "namespace": "Nails\\Invoice\\Driver\\Payment\\",
-                "class": "Stripe",
-                "settings": [
-                    {
-                        "key": "sLabel",
-                        "label": "Label",
-                        "info": "The name of the provider, as seen by customers.",
-                        "default": "Stripe"
-                    },
-                    {
-                        "key": "sStatementDescriptor",
-                        "label": "Statement Descriptor",
-                        "info": "The text shown on the customer's statement. You can sub in {{INVOICE_REF}} for the invoice reference.",
-                        "default": "INV #{{INVOICE_REF}}",
-                        "max_length": 22
-                    },
-                    {
-                        "key": "bEnableStripeReceiptEmail",
-                        "label": "Enable Stripe Receipt Email",
-                        "type": "boolean",
-                        "info": "If enabled, the <code>receipt_email</code> parameter is sent along with the charge request, which will normally trigger a receipt from Stripe",
-                        "default": false
-                    },
-                    {
-                        "legend": "API Keys - Test",
-                        "fields": [
-                            {
-                                "key": "sKeyTestPublic",
-                                "label": "Publishable Key",
-                                "type": "password",
-                                "encrypted": true
-                            },
-                            {
-                                "key": "sKeyTestSecret",
-                                "label": "Secret Key",
-                                "type": "password",
-                                "encrypted": true
-                            }
-                        ]
-                    },
-                    {
-                        "legend": "API Keys - Live",
-                        "fields": [
-                            {
-                                "key": "sKeyLivePublic",
-                                "label": "Publishable Key",
-                                "type": "password",
-                                "encrypted": true
-                            },
-                            {
-                                "key": "sKeyLiveSecret",
-                                "label": "Secret Key",
-                                "type": "password",
-                                "encrypted": true
-                            }
-                        ]
-                    }
-                ]
+                "class": "Stripe"
             }
         }
     }
