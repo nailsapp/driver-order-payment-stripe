@@ -10,7 +10,7 @@
  * @author      Nails Dev Team
  */
 
-namespace Nails\Database\Migration\Nails\DriverInvoiceStripe;
+namespace Nails\Invoice\Driver\Payment\Stripe\Database\Migration;
 
 use Nails\Common\Console\Migrate\Base;
 
