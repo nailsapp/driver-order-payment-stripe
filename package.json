@@ -6,7 +6,7 @@
     "license": "MIT",
     "repository": "https://github.com/nails/module-invoice/driver/stripe",
     "devDependencies": {
-        "autoprefixer": "^10.3",
+        "autoprefixer": "^10.4",
         "css-loader": "^6.4",
         "mini-css-extract-plugin": "^2.4",
         "sass": "^1.43",
