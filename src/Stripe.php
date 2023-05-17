@@ -468,14 +468,28 @@ class Stripe extends PaymentBase
                 ]);
 
                 if ($oPaymentIntent->status === self::PAYMENT_INTENT_STATUS_REQUIRES_ACTION) {
-                    $sUrl = $oPaymentIntent->next_action->redirect_to_url->url;
+                    $sUrl = $oPaymentIntent->next_action->redirect_to_url->url ?? null;
                 } else {
-                    $sUrl = $oPaymentIntent->next_source_action->authorize_with_url->url;
+                    $sUrl = $oPaymentIntent->next_source_action->authorize_with_url->url ?? null;
                 }
 
-                $oScaResponse
-                    ->setIsRedirect(true)
-                    ->setRedirectUrl($sUrl);
+                if (empty($sUrl)) {
+                    $oScaResponse
+                        ->setStatusFailed(
+                            implode(' ', [
+                                'Failed to ascertain redirect URL.',
+                                '`next_action``: ' . json_encode($oPaymentIntent->next_action),
+                                '`next_source_action``: ' . json_encode($oPaymentIntent->next_source_action),
+                            ]),
+                            '',
+                            'Failed to authorise the payment.'
+                        );
+
+                } else {
+                    $oScaResponse
+                        ->setIsRedirect(true)
+                        ->setRedirectUrl($sUrl);
+                }
 
                 break;
 
