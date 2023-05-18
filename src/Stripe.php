@@ -467,8 +467,12 @@ class Stripe extends PaymentBase
                     'return_url' => $sSuccessUrl,
                 ]);
 
-                if ($oPaymentIntent->status === self::PAYMENT_INTENT_STATUS_REQUIRES_ACTION) {
+                if ($oPaymentIntent->status === Self::PAYMENT_INTENT_STATUS_SUCCEEDED) {
+                    return $this->scaComplete($oScaResponse, $oPaymentIntent);
+
+                } elseif ($oPaymentIntent->status === self::PAYMENT_INTENT_STATUS_REQUIRES_ACTION) {
                     $sUrl = $oPaymentIntent->next_action->redirect_to_url->url ?? null;
+
                 } else {
                     $sUrl = $oPaymentIntent->next_source_action->authorize_with_url->url ?? null;
                 }
