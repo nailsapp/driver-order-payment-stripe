@@ -26,7 +26,6 @@ use Nails\Invoice\Factory\CompleteResponse;
 use Nails\Invoice\Factory\RefundResponse;
 use Nails\Invoice\Factory\ScaResponse;
 use Nails\Invoice\Resource;
-use stdClass;
 use Stripe\Account;
 use Stripe\BalanceTransaction;
 use Stripe\CountrySpec;
@@ -41,6 +40,7 @@ use Stripe\Exception\CardException;
 use Stripe\Exception\InvalidRequestException;
 use Stripe\PaymentIntent;
 use Stripe\Refund;
+use stdClass;
 
 /**
  * Class Stripe
